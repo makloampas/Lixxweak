@@ -1,184 +1,186 @@
--- LIXX Fish It | MOBILE VERSION (FIXED FLY & SCROLLABLE UI)
+-- LIXX Fish It | ANDROID ULTIMATE VERSION
 if getgenv().LixxFinalMobile then return end
 getgenv().LixxFinalMobile = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
 --------------------------------------------------
--- FLY SYSTEM (FIXED DIRECTION)
---------------------------------------------------
-local flying = false
-local flySpeed = 50
-local walkSpeed = 16
-local bodyVel, bodyGyro
-
-local function stopFly()
-    flying = false
-    if bodyVel then bodyVel:Destroy() end
-    if bodyGyro then bodyGyro:Destroy() end
-    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if hum then 
-        hum.PlatformStand = false
-        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-    end
-end
-
-local function startFly()
-    local char = player.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
-    stopFly()
-    flying = true
-    hum.PlatformStand = true
-
-    bodyVel = Instance.new("BodyVelocity", hrp)
-    bodyVel.MaxForce = Vector3.new(1,1,1) * 9e9
-    bodyVel.Velocity = Vector3.new(0,0,0)
-
-    bodyGyro = Instance.new("BodyGyro", hrp)
-    bodyGyro.MaxTorque = Vector3.new(1,1,1) * 9e9
-    bodyGyro.P = 3000
-
-    task.spawn(function()
-        while flying and hrp and char.Parent do
-            local cam = workspace.CurrentCamera
-            local moveDir = hum.MoveDirection
-            
-            if moveDir.Magnitude > 0 then
-                -- Perbaikan Logika: Menggunakan LookVector & RightVector sesuai input joystick
-                local direction = (cam.CFrame.LookVector * -moveDir.Z) + (cam.CFrame.RightVector * moveDir.X)
-                bodyVel.Velocity = direction.Unit * flySpeed
-            else
-                bodyVel.Velocity = Vector3.new(0, 0, 0)
-            end
-            bodyGyro.CFrame = cam.CFrame
-            task.wait()
-        end
-        stopFly()
-    end)
-end
-
-RunService.RenderStepped:Connect(function()
-    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") and not flying then
-        player.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = walkSpeed
-    end
-end)
-
---------------------------------------------------
--- UI SYSTEM (SCROLLABLE MENU)
+-- UI SETUP (SCROLLING & MOBILE FRIENDLY)
 --------------------------------------------------
 local sg = Instance.new("ScreenGui", player.PlayerGui)
-sg.Name = "LixxScriptUI"
+sg.Name = "LixxMobileUI"
 sg.ResetOnSpawn = false
 
--- Frame Utama (Sekarang pakai Scrolling agar muat semua)
-local mainFrame = Instance.new("ScrollingFrame", sg)
-mainFrame.Size = UDim2.fromOffset(240, 350)
-mainFrame.Position = UDim2.new(0.5, -120, 0.2, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-mainFrame.BorderSizePixel = 2
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.CanvasSize = UDim2.new(0, 0, 0, 550) -- Ukuran scroll ke bawah
-mainFrame.ScrollBarThickness = 6
+local main = Instance.new("Frame", sg)
+main.Size = UDim2.fromOffset(250, 350)
+main.Position = UDim2.new(0.5, -125, 0.2, 0)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
 
-local uiList = Instance.new("UIListLayout", mainFrame)
-uiList.Padding =信号.new(0, 8)
-uiList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+-- Corner UI agar terlihat modern
+local corner = Instance.new("UICorner", main)
+corner.CornerRadius = UDim.new(0, 10)
 
--- Title
-local title = Instance.new("TextLabel", mainFrame)
-title.Text = "LIXX FISH IT V2"
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+local title = Instance.new("TextLabel", main)
+title.Text = "LIXX MOBILE HUB"
+title.Size = UDim2.new(1, 0, 0.12, 0)
+title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 
--- Speed & Fly Inputs
+-- Tombol Close & Restore
+local closeBtn = Instance.new("TextButton", main)
+closeBtn.Text = "X"
+closeBtn.Size = UDim2.fromOffset(30, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 0)
+closeBtn.BackgroundTransparency = 1
+closeBtn.TextColor3 = Color3.new(1, 0, 0)
+
+local restoreBtn = Instance.new("TextButton", sg)
+restoreBtn.Text = "OPEN"
+restoreBtn.Size = UDim2.fromOffset(60, 40)
+restoreBtn.Position = UDim2.new(0, 10, 0.5, 0)
+restoreBtn.Visible = false
+restoreBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+restoreBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", restoreBtn)
+
+closeBtn.MouseButton1Click:Connect(function() main.Visible = false; restoreBtn.Visible = true end)
+restoreBtn.MouseButton1Click:Connect(function() main.Visible = true; restoreBtn.Visible = false end)
+
+-- SCROLLING CONTAINER
+local scroll = Instance.new("ScrollingFrame", main)
+scroll.Size = UDim2.new(1, -10, 0.85, 0)
+scroll.Position = UDim2.new(0, 5, 0.13, 0)
+scroll.BackgroundTransparency = 1
+scroll.CanvasSize = UDim2.new(0, 0, 2, 0) -- Area scroll panjang ke bawah
+scroll.ScrollBarThickness = 3
+
+local layout = Instance.new("UIListLayout", scroll)
+layout.Padding = UDim.new(0, 8)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+--------------------------------------------------
+-- FUNGSI PEMBANTU (HELPERS)
+--------------------------------------------------
+local function createButton(txt, color)
+    local btn = Instance.new("TextButton", scroll)
+    btn.Text = txt
+    btn.Size = UDim2.new(0.9, 0, 0, 40)
+    btn.BackgroundColor3 = color
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamSemibold
+    Instance.new("UICorner", btn)
+    return btn
+end
+
 local function createInput(place)
-    local i = Instance.new("TextBox", mainFrame)
-    i.PlaceholderText = place
-    i.Size = UDim2.new(0.9, 0, 0, 35)
-    i.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    i.TextColor3 = Color3.new(1, 1, 1)
-    return i
+    local inp = Instance.new("TextBox", scroll)
+    inp.PlaceholderText = place
+    inp.Size = UDim2.new(0.9, 0, 0, 35)
+    inp.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    inp.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", inp)
+    return inp
 end
 
-local speedInp = createInput("Set WalkSpeed (Def: 16)")
-speedInp.FocusLost:Connect(function() walkSpeed = tonumber(speedInp.Text) or 16 end)
-
-local flyInp = createInput("Set FlySpeed (Def: 50)")
-flyInp.FocusLost:Connect(function() flySpeed = tonumber(flyInp.Text) or 50 end)
-
-local btnFly = Instance.new("TextButton", mainFrame)
-btnFly.Text = "FLY: OFF"
-btnFly.Size = UDim2.new(0.9, 0, 0, 40)
-btnFly.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
-btnFly.TextColor3 = Color3.new(1, 1, 1)
-
 --------------------------------------------------
--- TELEPORT SECTION
+-- FITUR: FLY SYSTEM (STABLE LOOKVECTOR)
 --------------------------------------------------
-local tpTitle = Instance.new("TextLabel", mainFrame)
-tpTitle.Text = "--- TELEPORT USER ---"
-tpTitle.Size = UDim2.new(1, 0, 0, 30)
-tpTitle.BackgroundTransparency = 1
-tpTitle.TextColor3 = Color3.new(1, 1, 0)
-tpTitle.Font = Enum.Font.GothamBold
+local flying = false
+local flySpeed = 50
+local bv, bg
 
-local tpContainer = Instance.new("Frame", mainFrame)
-tpContainer.Size = UDim2.new(0.9, 0, 0, 150)
-tpContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-
-local tpScroll = Instance.new("ScrollingFrame", tpContainer)
-tpScroll.Size = UDim2.new(1, 0, 1, 0)
-tpScroll.BackgroundTransparency = 1
-tpScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-
-local tpList = Instance.new("UIListLayout", tpScroll)
-
-local function refreshPlayers()
-    for _, child in pairs(tpScroll:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
-    end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player then
-            local pBtn = Instance.new("TextButton", tpScroll)
-            pBtn.Text = p.DisplayName or p.Name
-            pBtn.Size = UDim2.new(1, 0, 0, 30)
-            pBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-            pBtn.TextColor3 = Color3.new(1, 1, 1)
-            pBtn.MouseButton1Click:Connect(function()
-                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    player.Character:SetPrimaryPartCFrame(p.Character.HumanoidRootPart.CFrame)
-                end
-            end)
-        end
-    end
-    tpScroll.CanvasSize = UDim2.new(0, 0, 0, tpList.AbsoluteContentSize.Y)
-end
-
-local btnRefresh = Instance.new("TextButton", mainFrame)
-btnRefresh.Text = "🔄 REFRESH LIST"
-btnRefresh.Size = UDim2.new(0.9, 0, 0, 35)
-btnRefresh.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-btnRefresh.TextColor3 = Color3.new(1, 1, 1)
-
--- Handlers
+local btnFly = createButton("FLY: OFF", Color3.fromRGB(150, 50, 50))
 btnFly.MouseButton1Click:Connect(function()
+    flying = not flying
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    
     if flying then
-        stopFly()
-        btnFly.Text = "FLY: OFF"
-        btnFly.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
-    else
-        startFly()
         btnFly.Text = "FLY: ON"
-        btnFly.BackgroundColor3 = Color3.fromRGB(0, 0, 120)
+        btnFly.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+        hum.PlatformStand = true
+        bv = Instance.new("BodyVelocity", hrp)
+        bv.MaxForce = Vector3.new(1,1,1) * 9e9
+        bg = Instance.new("BodyGyro", hrp)
+        bg.MaxTorque = Vector3.new(1,1,1) * 9e9
+        
+        task.spawn(function()
+            while flying do
+                local moveDir = hum.MoveDirection
+                if moveDir.Magnitude > 0 then
+                    -- Fly mengikuti arah pandang kamera
+                    bv.Velocity = camera.CFrame:VectorToWorldSpace(Vector3.new(moveDir.X, 0, moveDir.Z * -1).Unit * flySpeed)
+                else
+                    bv.Velocity = Vector3.new(0, 0.1, 0)
+                end
+                bg.CFrame = camera.CFrame
+                RunService.RenderStepped:Wait()
+            end
+            if bv then bv:Destroy() end
+            if bg then bg:Destroy() end
+            hum.PlatformStand = false
+        end)
+    else
+        btnFly.Text = "FLY: OFF"
+        btnFly.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
     end
 end)
 
-btnRefresh.MouseButton1Click:Connect(refreshPlayers)
-refreshPlayers()
+--------------------------------------------------
+-- FITUR: SPEED HACK
+--------------------------------------------------
+local walkSpeedVal = 16
+local speedInp = createInput("WalkSpeed (Default 16)")
+speedInp.FocusLost:Connect(function()
+    walkSpeedVal = tonumber(speedInp.Text) or 16
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.WalkSpeed = walkSpeedVal
+    end
+end)
+
+--------------------------------------------------
+-- FITUR: TELEPORT PLAYER
+--------------------------------------------------
+local tpInp = createInput("Target Username")
+local btnTp = createButton("TELEPORT TO PLAYER", Color3.fromRGB(0, 120, 200))
+
+btnTp.MouseButton1Click:Connect(function()
+    local targetName = tpInp.Text:lower()
+    for _, v in pairs(Players:GetPlayers()) do
+        if v.Name:lower():sub(1, #targetName) == targetName or v.DisplayName:lower():sub(1, #targetName) == targetName then
+            if v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character.HumanoidRootPart.CFrame = v.Character.HumanoidRootPart.CFrame
+                break
+            end
+        end
+    end
+end)
+
+--------------------------------------------------
+-- FITUR: SERVER REFRESH (REJOIN)
+--------------------------------------------------
+local btnRejoin = createButton("REJOIN SERVER", Color3.fromRGB(80, 80, 80))
+btnRejoin.MouseButton1Click:Connect(function()
+    TeleportService:Teleport(game.PlaceId, player)
+end)
+
+--------------------------------------------------
+-- FITUR: AUTO FISH (BASIC TRIGGER)
+--------------------------------------------------
+local autoFish = false
+local btnFish = createButton("AUTO FISH: OFF", Color3.fromRGB(100, 50, 150))
+btnFish.MouseButton1Click:Connect(function()
+    autoFish = not autoFish
+    btnFish.Text = autoFish and "AUTO FISH: ON" or "AUTO FISH: OFF"
+    -- Logika auto fish bisa kamu sesuaikan dengan remote event game pancingmu
+end)
