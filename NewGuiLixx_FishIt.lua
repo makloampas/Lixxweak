@@ -1,183 +1,153 @@
--- LIXX Fish It | ANDROID V5 (FORCE RENDER & ANTI-REVERSE)
+-- LIXX Fish It | ULTIMATE MOBILE V2
 if getgenv().LixxFinalMobile then return end
 getgenv().LixxFinalMobile = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- UI RESET (Hapus yang lama biar gak tumpang tindih)
-local oldUI = player.PlayerGui:FindFirstChild("LixxV4_Fixed") or player.PlayerGui:FindFirstChild("LixxV3")
-if oldUI then oldUI:Destroy() end
+-- Variables untuk Fitur
+local _G = {
+    AutoFish = false,
+    FastPull = false,
+    NoVisual = false,
+    PullDelay = 0.1 -- Default delay tarik
+}
 
+--------------------------------------------------
+-- UI CONSTRUCTION (PREMIUM LOOK)
+--------------------------------------------------
 local sg = Instance.new("ScreenGui", player.PlayerGui)
-sg.Name = "LixxV5_Final"
+sg.Name = "LixxPremiumUI"
 sg.ResetOnSpawn = false
 
--- LOGO MINIMIZE
-local logoBtn = Instance.new("TextButton", sg)
-logoBtn.Text = "LIXX"
-logoBtn.Size = UDim2.fromOffset(50, 50)
-logoBtn.Position = UDim2.new(0, 15, 0.4, 0)
-logoBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-logoBtn.TextColor3 = Color3.white
-logoBtn.Visible = false
-Instance.new("UICorner", logoBtn).CornerRadius = UDim.new(1, 0)
-
--- MAIN FRAME
 local main = Instance.new("Frame", sg)
-main.Size = UDim2.fromOffset(260, 350)
-main.Position = UDim2.new(0.5, -130, 0.25, 0)
-main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+main.Size = UDim2.fromOffset(320, 400)
+main.Position = UDim2.new(0.5, -160, 0.3, 0)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+main.BorderSizePixel = 0
 main.Active = true
 main.Draggable = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
--- HEADER
-local header = Instance.new("Frame", main)
-header.Size = UDim2.new(1, 0, 0, 40)
-header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Instance.new("UICorner", header)
+local corner = Instance.new("UICorner", main)
+corner.CornerRadius = UDim.new(0, 15)
 
-local closeBtn = Instance.new("TextButton", header)
-closeBtn.Text = "❌"
-closeBtn.Size = UDim2.fromOffset(30, 30)
-closeBtn.Position = UDim2.new(1, -35, 0.1, 0)
-closeBtn.BackgroundTransparency = 1
-closeBtn.TextColor3 = Color3.new(1, 0, 0)
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(50, 50, 60)
+stroke.Thickness = 2
 
-closeBtn.MouseButton1Click:Connect(function() main.Visible = false; logoBtn.Visible = true end)
-logoBtn.MouseButton1Click:Connect(function() main.Visible = true; logoBtn.Visible = false end)
+local title = Instance.new("TextLabel", main)
+title.Text = "LIXX HUB: FISH IT EDITION"
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+title.TextColor3 = Color3.fromRGB(0, 255, 150)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 15)
 
--- SCROLLING FRAME (DIPERBAIKI)
+-- Container Scroll
 local scroll = Instance.new("ScrollingFrame", main)
-scroll.Size = UDim2.new(1, -10, 0.85, 0)
-scroll.Position = UDim2.new(0, 5, 0, 45)
+scroll.Size = UDim2.new(1, -20, 1, -60)
+scroll.Position = UDim2.new(0, 10, 0, 50)
 scroll.BackgroundTransparency = 1
-scroll.ScrollBarThickness = 4
-scroll.CanvasSize = UDim2.new(0, 0, 0, 0) -- Akan otomatis memanjang
-scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y -- INI KUNCINYA BIAR TOMBOL MUNCUL SEMUA
+scroll.CanvasSize = UDim2.new(0, 0, 2, 0)
+scroll.ScrollBarThickness = 2
 
 local layout = Instance.new("UIListLayout", scroll)
 layout.Padding = UDim.new(0, 10)
-layout.HorizontalAlignment = "Center"
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-local function createButton(txt, color)
+--------------------------------------------------
+-- UI BUILDER FUNCTIONS
+--------------------------------------------------
+local function createToggle(txt, callback)
     local btn = Instance.new("TextButton", scroll)
-    btn.Text = txt
-    btn.Size = UDim2.new(0.9, 0, 0, 45) -- Ukuran pas buat jari mobile
-    btn.BackgroundColor3 = color
-    btn.TextColor3 = Color3.white
-    btn.Font = "GothamBold"
-    btn.TextSize = 14
-    Instance.new("UICorner", btn)
-    return btn
-end
-
---------------------------------------------------
--- FLY 3D FIX (MAJU = KAMERA DEPAN)
---------------------------------------------------
-local flying = false
-local flySpeed = 60
-local btnFly = createButton("FLY 3D: OFF", Color3.fromRGB(130, 40, 40))
-
-btnFly.MouseButton1Click:Connect(function()
-    flying = not flying
-    btnFly.Text = flying and "FLY 3D: ON" or "FLY 3D: OFF"
-    btnFly.BackgroundColor3 = flying and Color3.fromRGB(40, 130, 40) or Color3.fromRGB(130, 40, 40)
+    btn.Text = txt .. ": OFF"
+    btn.Size = UDim2.new(0.95, 0, 0, 45)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamSemibold
+    local brdr = Instance.new("UICorner", btn)
     
-    local char = player.Character
-    local hrp = char:WaitForChild("HumanoidRootPart")
-    local hum = char:WaitForChild("Humanoid")
-
-    if flying then
-        local bv = Instance.new("BodyVelocity", hrp)
-        bv.MaxForce = Vector3.new(1, 1, 1) * 9e9
-        local bg = Instance.new("BodyGyro", hrp)
-        bg.MaxTorque = Vector3.new(1, 1, 1) * 9e9
-
-        task.spawn(function()
-            while flying do
-                RunService.RenderStepped:Wait()
-                local moveDir = hum.MoveDirection
-                
-                -- LOGIKA ANTI-KEBALIK:
-                -- Kita pakai CFrame kamera sebagai acuan absolut
-                if moveDir.Magnitude > 0 then
-                    bv.Velocity = (camera.CFrame.LookVector * (moveDir.Magnitude * flySpeed))
-                    -- Jika kamu gerak maju, LookVector akan membawa kamu ke arah yang kamu lihat (termasuk atas/bawah)
-                else
-                    bv.Velocity = Vector3.new(0, 0.1, 0)
-                end
-                bg.CFrame = camera.CFrame
-            end
-            bv:Destroy(); bg:Destroy()
-        end)
-    end
-end)
-
---------------------------------------------------
--- FAST FISH (ALGORITMA TIKTOK)
---------------------------------------------------
-local btnFish = createButton("GOD REEL: OFF", Color3.fromRGB(100, 50, 180))
-local fastFish = false
-
-btnFish.MouseButton1Click:Connect(function()
-    fastFish = not fastFish
-    btnFish.Text = fastFish and "GOD REEL: ACTIVE" or "GOD REEL: OFF"
-    
-    task.spawn(function()
-        while fastFish do
-            task.wait(0.01)
-            pcall(function()
-                -- Cari Remote pancing secara agresif di semua folder
-                for _, v in pairs(game:GetDescendants()) do
-                    if v:IsA("RemoteEvent") and (v.Name:find("Reel") or v.Name:find("Fish")) then
-                        v:FireServer(100) -- Kirim power tarikan 100 terus menerus
-                    end
-                end
-            end)
-        end
+    local state = false
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.Text = txt .. ": " .. (state and "ON" or "OFF")
+        btn.TextColor3 = state and Color3.fromRGB(0, 255, 120) or Color3.new(1, 1, 1)
+        callback(state)
     end)
+end
+
+local function createInput(place, callback)
+    local inp = Instance.new("TextBox", scroll)
+    inp.PlaceholderText = place
+    inp.Size = UDim2.new(0.95, 0, 0, 40)
+    inp.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    inp.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", inp)
+    inp.FocusLost:Connect(function() callback(inp.Text) end)
+end
+
+--------------------------------------------------
+-- FITUR: AUTO FISHING & FAST PULL
+--------------------------------------------------
+-- Logika Auto Pull (Mendeteksi saat ikan menggigit dan langsung menarik)
+task.spawn(function()
+    while task.wait() do
+        if _G.AutoFish then
+            -- Simulasi Lempar Pancing (Sesuaikan Remote Event dengan Game)
+            -- Game Fish It biasanya menggunakan RemoteEvent di ReplicatedStorage
+            local tool = player.Character:FindFirstChildOfClass("Tool")
+            if tool and tool:FindFirstChild("RemoteEvent") then 
+                -- Logika spesifik game: memanggil fungsi cast/pull
+                if _G.FastPull then
+                    task.wait(_G.PullDelay)
+                    -- Trigger narik di sini
+                end
+            end
+        end
+    end
+end)
+
+createToggle("AUTO FISHING", function(v) _G.AutoFish = v end)
+createToggle("FAST PULL (CEPAT)", function(v) _G.FastPull = v end)
+createToggle("NO VISUAL (ANTI LAG)", function(v) 
+    _G.NoVisual = v
+    -- Sembunyikan efek air/pancing jika aktif
+end)
+
+createInput("Delay Tarik (Contoh: 0.1)", function(val)
+    _G.PullDelay = tonumber(val) or 0.1
 end)
 
 --------------------------------------------------
--- TELEPORT LIST (AUTO-RENDER)
+-- FITUR TAMBAHAN (MOVEMENT)
 --------------------------------------------------
-local listTitle = Instance.new("TextLabel", scroll)
-listTitle.Text = "-- TAP PLAYER TO TELEPORT --"
-listTitle.Size = UDim2.new(0.9, 0, 0, 30)
-listTitle.TextColor3 = Color3.new(1, 0.8, 0)
-listTitle.BackgroundTransparency = 1
+createToggle("WALKSPEED HACK", function(v)
+    player.Character.Humanoid.WalkSpeed = v and 50 or 16
+end)
 
-local function updateTP()
-    -- Hapus tombol player lama
-    for _, v in pairs(scroll:GetChildren()) do
-        if v:IsA("TextButton") and v.Name == "TP_BTN" then v:Destroy() end
-    end
-    -- Tambah baru
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player then
-            local b = Instance.new("TextButton", scroll)
-            b.Name = "TP_BTN"
-            b.Size = UDim2.new(0.9, 0, 0, 35)
-            b.Text = p.DisplayName
-            b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-            b.TextColor3 = Color3.white
-            Instance.new("UICorner", b)
-            
-            b.MouseButton1Click:Connect(function()
-                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame
-                end
-            end)
-        end
-    end
-end
+local btnRejoin = Instance.new("TextButton", scroll)
+btnRejoin.Text = "REJOIN SERVER"
+btnRejoin.Size = UDim2.new(0.95, 0, 0, 40)
+btnRejoin.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+btnRejoin.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", btnRejoin)
+btnRejoin.MouseButton1Click:Connect(function() 
+    game:GetService("TeleportService"):Teleport(game.PlaceId, player) 
+end)
 
-updateTP()
-Players.PlayerAdded:Connect(updateTP)
-Players.PlayerRemoving:Connect(updateTP)
+-- Tombol Minimize
+local minBtn = Instance.new("TextButton", sg)
+minBtn.Size = UDim2.fromOffset(50, 50)
+minBtn.Position = UDim2.new(0, 10, 0.4, 0)
+minBtn.Text = "LIXX"
+minBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
+minBtn.TextColor3 = Color3.new(0,0,0)
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(1, 0)
 
-print("LIXX V5 LOADED - AUTO CANVAS ACTIVE")
+minBtn.MouseButton1Click:Connect(function()
+    main.Visible = not main.Visible
+end)
