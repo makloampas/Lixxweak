@@ -1,4 +1,4 @@
--- LIXX Fish It | ANDROID ULTIMATE V3 (FINAL REPAIR)
+-- LIXX Fish It | ANDROID ULTIMATE V4 (ULTRA FIX)
 if getgenv().LixxFinalMobile then return end
 getgenv().LixxFinalMobile = true
 
@@ -9,47 +9,48 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 --------------------------------------------------
--- UI SETUP (FIXED LIST & LOGO)
+-- UI SETUP (RESPONSIVE MOBILE)
 --------------------------------------------------
 local sg = Instance.new("ScreenGui", player.PlayerGui)
-sg.Name = "LixxV3"
+sg.Name = "LixxV4_Fixed"
 sg.ResetOnSpawn = false
 
+-- Tombol Logo LIXX
 local logoBtn = Instance.new("TextButton", sg)
 logoBtn.Text = "LIXX"
-logoBtn.Size = UDim2.fromOffset(55, 55)
-logoBtn.Position = UDim2.new(0, 15, 0.15, 0)
-logoBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-logoBtn.TextColor3 = Color3.new(1, 1, 1)
+logoBtn.Size = UDim2.fromOffset(50, 50)
+logoBtn.Position = UDim2.new(0, 10, 0.2, 0)
+logoBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+logoBtn.TextColor3 = Color3.white
 logoBtn.Visible = false
 Instance.new("UICorner", logoBtn).CornerRadius = UDim.new(1, 0)
 
 local main = Instance.new("Frame", sg)
-main.Size = UDim2.fromOffset(280, 420)
-main.Position = UDim2.new(0.5, -140, 0.25, 0)
-main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+main.Size = UDim2.fromOffset(260, 380)
+main.Position = UDim2.new(0.5, -130, 0.2, 0)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 main.Active = true
 main.Draggable = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 15)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
 
 local header = Instance.new("Frame", main)
-header.Size = UDim2.new(1, 0, 0, 45)
-header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+header.Size = UDim2.new(1, 0, 0, 40)
+header.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 Instance.new("UICorner", header)
 
 local title = Instance.new("TextLabel", header)
-title.Text = " LIXX MOBILE V3 - FIXED"
-title.Size = UDim2.new(0.7, 0, 1, 0)
+title.Text = " LIXX V4 - ULTRA FIX"
+title.Size = UDim2.new(0.8, 0, 1, 0)
 title.BackgroundTransparency = 1
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.white
+title.Font = "GothamBold"
 title.TextXAlignment = "Left"
 title.Position = UDim2.new(0.05, 0, 0, 0)
 
 local closeBtn = Instance.new("TextButton", header)
 closeBtn.Text = "❌"
-closeBtn.Size = UDim2.fromOffset(35, 35)
-closeBtn.Position = UDim2.new(1, -40, 0.1, 0)
+closeBtn.Size = UDim2.fromOffset(30, 30)
+closeBtn.Position = UDim2.new(1, -35, 0.1, 0)
 closeBtn.BackgroundTransparency = 1
 closeBtn.TextColor3 = Color3.new(1, 0, 0)
 
@@ -60,29 +61,29 @@ local scroll = Instance.new("ScrollingFrame", main)
 scroll.Size = UDim2.new(1, -10, 0.85, 0)
 scroll.Position = UDim2.new(0, 5, 0.12, 5)
 scroll.BackgroundTransparency = 1
-scroll.CanvasSize = UDim2.new(0, 0, 0, 600)
-scroll.ScrollBarThickness = 0
+scroll.ScrollBarThickness = 2
+scroll.CanvasSize = UDim2.new(0, 0, 0, 500) -- Memastikan area scroll cukup luas
 
 local layout = Instance.new("UIListLayout", scroll)
-layout.Padding = UDim.new(0, 7)
+layout.Padding = UDim.new(0, 8)
 layout.HorizontalAlignment = "Center"
 
 --------------------------------------------------
--- FIX FLY 3D (REVERSED CONTROL FIXED)
+-- FLY 3D (DIPERBAIKI)
 --------------------------------------------------
 local flying = false
-local flySpeed = 70
+local flySpeed = 60
 local btnFly = Instance.new("TextButton", scroll)
 btnFly.Text = "FLY 3D: OFF"
-btnFly.Size = UDim2.new(0.9, 0, 0, 40)
-btnFly.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+btnFly.Size = UDim2.new(0.9, 0, 0, 45)
+btnFly.BackgroundColor3 = Color3.fromRGB(120, 40, 40)
 btnFly.TextColor3 = Color3.white
 Instance.new("UICorner", btnFly)
 
 btnFly.MouseButton1Click:Connect(function()
     flying = not flying
     btnFly.Text = flying and "FLY 3D: ON" or "FLY 3D: OFF"
-    btnFly.BackgroundColor3 = flying and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
+    btnFly.BackgroundColor3 = flying and Color3.fromRGB(40, 120, 40) or Color3.fromRGB(120, 40, 40)
     
     local char = player.Character
     local hrp = char:WaitForChild("HumanoidRootPart")
@@ -96,12 +97,11 @@ btnFly.MouseButton1Click:Connect(function()
 
         task.spawn(function()
             while flying do
-                RunService.RenderStepped:Wait()
+                RunService.Heartbeat:Wait()
                 local moveDir = hum.MoveDirection
-                -- FIX: Menggunakan negatif LookVector agar arah joystick maju = kamera maju
                 if moveDir.Magnitude > 0 then
-                    bv.Velocity = (camera.CFrame.LookVector * (moveDir.Z * -flySpeed)) + 
-                                  (camera.CFrame.RightVector * (moveDir.X * flySpeed))
+                    -- Kalkulasi arah: Kamera LookVector digunakan secara penuh (Maju = Ke depan kamera)
+                    bv.Velocity = camera.CFrame:VectorToWorldSpace(Vector3.new(moveDir.X, 0, moveDir.Z * 1).Unit * -flySpeed)
                 else
                     bv.Velocity = Vector3.new(0, 0.1, 0)
                 end
@@ -113,13 +113,13 @@ btnFly.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------
--- MANCING CEPAT (GOD REEL) - ALA TIKTOK
+-- GOD FISH (PULL CEPAT)
 --------------------------------------------------
 local godFish = false
 local btnFish = Instance.new("TextButton", scroll)
 btnFish.Text = "GOD FISH: OFF"
-btnFish.Size = UDim2.new(0.9, 0, 0, 40)
-btnFish.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
+btnFish.Size = UDim2.new(0.9, 0, 0, 45)
+btnFish.BackgroundColor3 = Color3.fromRGB(80, 40, 150)
 btnFish.TextColor3 = Color3.white
 Instance.new("UICorner", btnFish)
 
@@ -129,16 +129,16 @@ btnFish.MouseButton1Click:Connect(function()
     
     task.spawn(function()
         while godFish do
-            task.wait(0.05) -- Delay minimal biar gak crash tapi narik gila-gilaan
+            task.wait(0.01)
             pcall(function()
-                -- Mencari tool pancing di karakter
                 local tool = player.Character:FindFirstChildOfClass("Tool")
-                if tool then
-                    -- Mengirim sinyal "Click" atau "Pull" ke server berkali-kali
-                    -- Kamu bisa sesuaikan nama Remote-nya jika tau (contoh: FishEvents)
-                    local re = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
-                    if re then
-                        re:FireServer("Reel", 100) -- Menarik dengan power 100
+                if tool and tool.Name:lower():find("rod") then
+                    -- Mencoba menembak Remote pull secara umum
+                    local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events") or game:GetService("ReplicatedStorage")
+                    for _, v in pairs(events:GetDescendants()) do
+                        if v:IsA("RemoteEvent") and (v.Name:find("Reel") or v.Name:find("Catch")) then
+                            v:FireServer(100) -- Power max
+                        end
                     end
                 end
             end)
@@ -147,57 +147,46 @@ btnFish.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------
--- TELEPORT LIST (FIXED UI & AUTO REFRESH)
+-- TELEPORT LIST (AUTO-FIX)
 --------------------------------------------------
-local tpTitle = Instance.new("TextLabel", scroll)
-tpTitle.Text = "--- PLAYER LIST (TAP TO TP) ---"
-tpTitle.Size = UDim2.new(0.9, 0, 0, 25)
-tpTitle.TextColor3 = Color3.new(1, 0.8, 0)
-tpTitle.BackgroundTransparency = 1
+local listTitle = Instance.new("TextLabel", scroll)
+listTitle.Text = "-- TELEPORT LIST --"
+listTitle.Size = UDim2.new(0.9, 0, 0, 20)
+listTitle.TextColor3 = Color3.new(0, 1, 0.5)
+listTitle.BackgroundTransparency = 1
 
 local listFrame = Instance.new("Frame", scroll)
 listFrame.Size = UDim2.new(0.95, 0, 0, 150)
-listFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+listFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Instance.new("UICorner", listFrame)
 
 local listScroll = Instance.new("ScrollingFrame", listFrame)
 listScroll.Size = UDim2.new(1, -10, 1, -10)
 listScroll.Position = UDim2.new(0, 5, 0, 5)
 listScroll.BackgroundTransparency = 1
-listScroll.ScrollBarThickness = 3
-listScroll.CanvasSize = UDim2.new(0, 0, 0, 0) -- Akan update otomatis
+listScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+Instance.new("UIListLayout", listScroll).Padding = UDim.new(0, 5)
 
-local listLayout = Instance.new("UIListLayout", listScroll)
-listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    listScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y)
-end)
-
-local function refreshList()
-    for _, v in pairs(listScroll:GetChildren()) do
-        if v:IsA("TextButton") then v:Destroy() end
-    end
+local function updateTP()
+    for _, v in pairs(listScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= player then
-            local pBtn = Instance.new("TextButton", listScroll)
-            pBtn.Text = p.DisplayName .. " (@" .. p.Name .. ")"
-            pBtn.Size = UDim2.new(1, -5, 0, 30)
-            pBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-            pBtn.TextColor3 = Color3.white
-            pBtn.Font = "Gotham"
-            pBtn.TextSize = 12
-            Instance.new("UICorner", pBtn)
-            
-            pBtn.MouseButton1Click:Connect(function()
+            local b = Instance.new("TextButton", listScroll)
+            b.Size = UDim2.new(1, 0, 0, 30)
+            b.Text = p.DisplayName
+            b.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            b.TextColor3 = Color3.white
+            Instance.new("UICorner", b)
+            b.MouseButton1Click:Connect(function()
                 if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame
                 end
             end)
         end
     end
+    listScroll.CanvasSize = UDim2.new(0, 0, 0, #Players:GetPlayers() * 35)
 end
 
-refreshList()
-Players.PlayerAdded:Connect(refreshList)
-Players.PlayerRemoving:Connect(refreshList)
-
-print("LIXX V3 LOADED SUCCESSFULLY")
+updateTP()
+Players.PlayerAdded:Connect(updateTP)
+Players.PlayerRemoving:Connect(updateTP)
