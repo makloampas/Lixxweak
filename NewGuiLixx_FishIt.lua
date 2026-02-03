@@ -1,162 +1,244 @@
---[[ 
-    LIXX Fish It - Telegram Fish Notifier
-    Backpack Detection Method (STABLE)
-    Executor: Delta
-]]
+-- LIXX Fish It | Telegram Notifier + Fly
+-- Executor: Delta / Fluxus
 
-if getgenv().LixxNotifier then return end
-getgenv().LixxNotifier = true
+if getgenv().LixxUltimate then return end
+getgenv().LixxUltimate = true
 
 local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
--- ================= HTTP FIX =================
 local request = request or http_request or (syn and syn.request)
-if not request then
-    warn("[LIXX] HTTP request not supported")
-    return
-end
+if not request then return warn("HTTP not supported") end
 
--- ================= CONFIG =================
+--------------------------------------------------
+-- TELEGRAM CONFIG
+--------------------------------------------------
 local BOT_TOKEN = ""
 local CHAT_ID = ""
-local enabled = false
+local notifierOn = false
 local sent = {}
 
--- ================= TELEGRAM =================
-local function sendTelegram(text)
-    if BOT_TOKEN == "" or CHAT_ID == "" then return end
+local TierFilter = {
+    Common = false,
+    Uncommon = false,
+    Legendary = true,
+    Mythic = true,
+    Secret = true
+}
 
+local TierEmoji = {
+    Common = "⚪",
+    Uncommon = "🟢",
+    Legendary = "🟡",
+    Mythic = "🔴",
+    Secret = "🟣"
+}
+
+local function sendTG(msg)
     request({
         Url = "https://api.telegram.org/bot"..BOT_TOKEN.."/sendMessage",
         Method = "POST",
         Headers = {["Content-Type"] = "application/json"},
         Body = HttpService:JSONEncode({
             chat_id = CHAT_ID,
-            text = text
+            text = msg
         })
     })
 end
 
--- ================= DETECT FISH =================
-local function hookBackpack()
-    local backpack = player:WaitForChild("Backpack")
+local function getTier(name)
+    name = name:lower()
+    if name:find("secret") then return "Secret" end
+    if name:find("mythic") then return "Mythic" end
+    if name:find("legendary") then return "Legendary" end
+    if name:find("uncommon") then return "Uncommon" end
+    return "Common"
+end
 
-    backpack.ChildAdded:Connect(function(tool)
-        if not enabled then return end
-        if not tool:IsA("Tool") then return end
-        if sent[tool.Name] then return end
-        sent[tool.Name] = true
+local function onFish(obj)
+    if not notifierOn then return end
+    if not obj:IsA("Tool") then return end
+    if sent[obj] then return end
+    sent[obj] = true
 
-        local rarity = "Unknown"
-        if tool:FindFirstChild("Rarity") then
-            rarity = tostring(tool.Rarity.Value)
-        end
+    local tier = getTier(obj.Name)
+    if not TierFilter[tier] then return end
 
-        sendTelegram(
-            "🎣 LIXX Fish Notifier\n"..
-            "Player: "..player.Name.."\n"..
-            "Fish: "..tool.Name.."\n"..
-            "Rarity: "..rarity
-        )
+    sendTG(
+        TierEmoji[tier].." Fish It Alert\n"..
+        "Player: "..player.Name..
+        "\nFish: "..obj.Name..
+        "\nTier: "..tier
+    )
+end
+
+local function hookFish()
+    if player.Character then
+        player.Character.ChildAdded:Connect(onFish)
+    end
+    player.CharacterAdded:Connect(function(c)
+        c.ChildAdded:Connect(onFish)
+    end)
+    player.Backpack.ChildAdded:Connect(onFish)
+end
+
+--------------------------------------------------
+-- FLY SYSTEM
+--------------------------------------------------
+local flying = false
+local flySpeed = 60
+local bv, bg
+
+local function startFly()
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    bv = Instance.new("BodyVelocity", hrp)
+    bv.MaxForce = Vector3.new(9e9,9e9,9e9)
+
+    bg = Instance.new("BodyGyro", hrp)
+    bg.MaxTorque = Vector3.new(9e9,9e9,9e9)
+    bg.CFrame = hrp.CFrame
+
+    RunService:BindToRenderStep("LIXX_FLY", 0, function()
+        if not flying then return end
+        local cam = workspace.CurrentCamera
+        local move = Vector3.zero
+
+        if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+
+        bv.Velocity = move * flySpeed
+        bg.CFrame = cam.CFrame
     end)
 end
 
--- ================= UI =================
+local function stopFly()
+    RunService:UnbindFromRenderStep("LIXX_FLY")
+    if bv then bv:Destroy() end
+    if bg then bg:Destroy() end
+end
+
+--------------------------------------------------
+-- UI
+--------------------------------------------------
 local gui = Instance.new("ScreenGui", player.PlayerGui)
-gui.Name = "LixxUI"
 gui.ResetOnSpawn = false
 
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.fromScale(0.3,0.42)
-main.Position = UDim2.fromScale(0.35,0.28)
-main.BackgroundColor3 = Color3.fromRGB(15,35,25)
-main.BorderSizePixel = 0
-main.Active = true
-main.Draggable = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0,18)
-
--- CLOSE
-local close = Instance.new("TextButton", main)
-close.Size = UDim2.fromScale(0.1,0.1)
-close.Position = UDim2.fromScale(0.88,0.02)
-close.Text = "❌"
-close.TextScaled = true
-close.BackgroundTransparency = 1
-close.TextColor3 = Color3.fromRGB(255,80,80)
-close.MouseButton1Click:Connect(function()
-    gui:Destroy()
-end)
-
 -- LOGO
-local logo = Instance.new("TextLabel", main)
-logo.Size = UDim2.fromScale(1,0.18)
+local logo = Instance.new("TextButton", gui)
+logo.Size = UDim2.fromScale(0.06,0.08)
+logo.Position = UDim2.fromScale(0.01,0.35)
 logo.Text = "LIXX"
 logo.Font = Enum.Font.GothamBlack
 logo.TextScaled = true
-logo.TextColor3 = Color3.fromRGB(0,255,140)
-logo.BackgroundTransparency = 1
+logo.BackgroundColor3 = Color3.fromRGB(0,180,120)
+logo.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", logo)
 
--- SUB
-local sub = Instance.new("TextLabel", main)
-sub.Position = UDim2.fromScale(0,0.16)
-sub.Size = UDim2.fromScale(1,0.08)
-sub.Text = "Fish It Telegram Notifier"
-sub.TextScaled = true
-sub.TextColor3 = Color3.fromRGB(200,255,220)
-sub.BackgroundTransparency = 1
+-- MAIN
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.fromScale(0.36,0.55)
+main.Position = UDim2.fromScale(0.32,0.22)
+main.BackgroundColor3 = Color3.fromRGB(12,30,22)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+Instance.new("UICorner", main)
+
+logo.MouseButton1Click:Connect(function()
+    main.Visible = not main.Visible
+end)
+
+-- CLOSE
+local close = Instance.new("TextButton", main)
+close.Text = "❌"
+close.Size = UDim2.fromScale(0.1,0.08)
+close.Position = UDim2.fromScale(0.88,0.02)
+close.BackgroundTransparency = 1
+close.TextScaled = true
+close.MouseButton1Click:Connect(function()
+    main.Visible = false
+end)
+
+-- TITLE
+local title = Instance.new("TextLabel", main)
+title.Size = UDim2.fromScale(1,0.12)
+title.Text = "LIXX Fish It Utility"
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.fromRGB(0,255,150)
+title.BackgroundTransparency = 1
 
 -- INPUT
-local function input(ph,y)
+local function box(ph,y)
     local b = Instance.new("TextBox", main)
     b.Position = UDim2.fromScale(0.08,y)
-    b.Size = UDim2.fromScale(0.84,0.09)
+    b.Size = UDim2.fromScale(0.84,0.07)
     b.PlaceholderText = ph
-    b.Text = ""
     b.TextScaled = true
-    b.Font = Enum.Font.Gotham
     b.BackgroundColor3 = Color3.fromRGB(30,70,55)
     b.TextColor3 = Color3.new(1,1,1)
     Instance.new("UICorner", b)
     return b
 end
 
-local tokenBox = input("Telegram Bot Token",0.28)
-local idBox = input("Telegram User ID",0.40)
+local tokenBox = box("Telegram Bot Token",0.15)
+local idBox = box("Telegram User ID",0.24)
 
 -- TEST
 local test = Instance.new("TextButton", main)
-test.Position = UDim2.fromScale(0.08,0.54)
-test.Size = UDim2.fromScale(0.38,0.1)
+test.Position = UDim2.fromScale(0.08,0.33)
+test.Size = UDim2.fromScale(0.38,0.08)
 test.Text = "TEST NOTIF"
 test.TextScaled = true
 test.BackgroundColor3 = Color3.fromRGB(0,120,90)
-test.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", test)
 
 test.MouseButton1Click:Connect(function()
     BOT_TOKEN = tokenBox.Text
     CHAT_ID = idBox.Text
-    sendTelegram("Hallo kak "..player.Name.." 👋\nScript berjalan lancar\nNotif akan masuk 😸✌️")
+    sendTG("Hallo kak "..player.Name.." 👋\nScript LIXX berjalan 😸✌️")
 end)
 
 -- RUN
 local run = Instance.new("TextButton", main)
-run.Position = UDim2.fromScale(0.54,0.54)
-run.Size = UDim2.fromScale(0.38,0.1)
-run.Text = "JALANKAN"
+run.Position = UDim2.fromScale(0.54,0.33)
+run.Size = UDim2.fromScale(0.38,0.08)
+run.Text = "AKTIFKAN NOTIF"
 run.TextScaled = true
 run.BackgroundColor3 = Color3.fromRGB(0,200,130)
-run.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", run)
 
 run.MouseButton1Click:Connect(function()
     BOT_TOKEN = tokenBox.Text
     CHAT_ID = idBox.Text
-    enabled = true
-    hookBackpack()
-    sendTelegram("🚀 LIXX aktif untuk "..player.Name)
+    notifierOn = true
+    hookFish()
+    sendTG("🚀 LIXX Notifier aktif untuk "..player.Name)
 end)
 
-print("✅ LIXX Fish It Notifier Loaded")
+-- FLY TOGGLE
+local flyBtn = Instance.new("TextButton", main)
+flyBtn.Position = UDim2.fromScale(0.08,0.45)
+flyBtn.Size = UDim2.fromScale(0.84,0.09)
+flyBtn.Text = "FLY : OFF"
+flyBtn.TextScaled = true
+flyBtn.BackgroundColor3 = Color3.fromRGB(40,120,90)
+Instance.new("UICorner", flyBtn)
+
+flyBtn.MouseButton1Click:Connect(function()
+    flying = not flying
+    flyBtn.Text = flying and "FLY : ON" or "FLY : OFF"
+    if flying then startFly() else stopFly() end
+end)
+
+print("✅ LIXX NOTIFIER + FLY LOADED")
