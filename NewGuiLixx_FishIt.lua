@@ -1,166 +1,162 @@
 --[[ 
     LIXX Fish It - Telegram Fish Notifier
-    No Boat | Notification Only
+    Backpack Detection Method (STABLE)
     Executor: Delta
 ]]
 
-if getgenv().LixxFishNotifier then return end
-getgenv().LixxFishNotifier = true
+if getgenv().LixxNotifier then return end
+getgenv().LixxNotifier = true
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
--- ================= CONFIG =================
-local enabled = false
-local selectedTiers = {
-    Uncommon = false,
-    Mythic = true,
-    Legendary = true,
-    Secret = true
-}
+-- ================= HTTP FIX =================
+local request = request or http_request or (syn and syn.request)
+if not request then
+    warn("[LIXX] HTTP request not supported")
+    return
+end
 
+-- ================= CONFIG =================
 local BOT_TOKEN = ""
 local CHAT_ID = ""
+local enabled = false
+local sent = {}
 
 -- ================= TELEGRAM =================
-local function sendTelegram(msg)
+local function sendTelegram(text)
     if BOT_TOKEN == "" or CHAT_ID == "" then return end
 
-    local url = "https://api.telegram.org/bot"..BOT_TOKEN.."/sendMessage"
-    local data = {
-        chat_id = CHAT_ID,
-        text = msg
-    }
-
-    pcall(function()
-        syn.request({
-            Url = url,
-            Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = HttpService:JSONEncode(data)
+    request({
+        Url = "https://api.telegram.org/bot"..BOT_TOKEN.."/sendMessage",
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = HttpService:JSONEncode({
+            chat_id = CHAT_ID,
+            text = text
         })
-    end)
+    })
 end
 
--- ================= FISH DETECT =================
-local function checkTier(text)
-    text = text:lower()
-    if text:find("secret") and selectedTiers.Secret then return "Secret" end
-    if text:find("legendary") and selectedTiers.Legendary then return "Legendary" end
-    if text:find("mythic") and selectedTiers.Mythic then return "Mythic" end
-    if text:find("uncommon") and selectedTiers.Uncommon then return "Uncommon" end
-end
+-- ================= DETECT FISH =================
+local function hookBackpack()
+    local backpack = player:WaitForChild("Backpack")
 
--- Monitor GUI reward text
-local function hookRewards()
-    player.PlayerGui.DescendantAdded:Connect(function(obj)
+    backpack.ChildAdded:Connect(function(tool)
         if not enabled then return end
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            local txt = obj.Text or ""
-            local tier = checkTier(txt)
-            if tier then
-                sendTelegram("🎣 Fish It Notification\nTier: "..tier.."\nPlayer: "..player.Name)
-            end
+        if not tool:IsA("Tool") then return end
+        if sent[tool.Name] then return end
+        sent[tool.Name] = true
+
+        local rarity = "Unknown"
+        if tool:FindFirstChild("Rarity") then
+            rarity = tostring(tool.Rarity.Value)
         end
+
+        sendTelegram(
+            "🎣 LIXX Fish Notifier\n"..
+            "Player: "..player.Name.."\n"..
+            "Fish: "..tool.Name.."\n"..
+            "Rarity: "..rarity
+        )
     end)
 end
 
 -- ================= UI =================
 local gui = Instance.new("ScreenGui", player.PlayerGui)
-gui.Name = "LixxFishNotifier"
+gui.Name = "LixxUI"
+gui.ResetOnSpawn = false
 
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.fromScale(0.32,0.45)
-main.Position = UDim2.fromScale(0.34,0.25)
-main.BackgroundColor3 = Color3.fromRGB(15,30,20)
+main.Size = UDim2.fromScale(0.3,0.42)
+main.Position = UDim2.fromScale(0.35,0.28)
+main.BackgroundColor3 = Color3.fromRGB(15,35,25)
 main.BorderSizePixel = 0
 main.Active = true
 main.Draggable = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0,16)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0,18)
 
-local function label(txt, y)
-    local l = Instance.new("TextLabel", main)
-    l.Position = UDim2.fromScale(0.05,y)
-    l.Size = UDim2.fromScale(0.9,0.07)
-    l.Text = txt
-    l.TextColor3 = Color3.fromRGB(0,255,140)
-    l.Font = Enum.Font.GothamBold
-    l.TextScaled = true
-    l.BackgroundTransparency = 1
-end
+-- CLOSE
+local close = Instance.new("TextButton", main)
+close.Size = UDim2.fromScale(0.1,0.1)
+close.Position = UDim2.fromScale(0.88,0.02)
+close.Text = "❌"
+close.TextScaled = true
+close.BackgroundTransparency = 1
+close.TextColor3 = Color3.fromRGB(255,80,80)
+close.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end)
 
-label("LIXX | Fish It Notifier",0.02)
+-- LOGO
+local logo = Instance.new("TextLabel", main)
+logo.Size = UDim2.fromScale(1,0.18)
+logo.Text = "LIXX"
+logo.Font = Enum.Font.GothamBlack
+logo.TextScaled = true
+logo.TextColor3 = Color3.fromRGB(0,255,140)
+logo.BackgroundTransparency = 1
+
+-- SUB
+local sub = Instance.new("TextLabel", main)
+sub.Position = UDim2.fromScale(0,0.16)
+sub.Size = UDim2.fromScale(1,0.08)
+sub.Text = "Fish It Telegram Notifier"
+sub.TextScaled = true
+sub.TextColor3 = Color3.fromRGB(200,255,220)
+sub.BackgroundTransparency = 1
 
 -- INPUT
-local function input(ph, y)
+local function input(ph,y)
     local b = Instance.new("TextBox", main)
-    b.Position = UDim2.fromScale(0.05,y)
-    b.Size = UDim2.fromScale(0.9,0.08)
+    b.Position = UDim2.fromScale(0.08,y)
+    b.Size = UDim2.fromScale(0.84,0.09)
     b.PlaceholderText = ph
     b.Text = ""
     b.TextScaled = true
     b.Font = Enum.Font.Gotham
-    b.BackgroundColor3 = Color3.fromRGB(30,60,45)
+    b.BackgroundColor3 = Color3.fromRGB(30,70,55)
     b.TextColor3 = Color3.new(1,1,1)
     Instance.new("UICorner", b)
     return b
 end
 
-local tokenBox = input("Telegram Bot Token",0.12)
-local idBox = input("Telegram User ID",0.22)
-
--- TIER BUTTONS
-local y = 0.32
-for tier,_ in pairs(selectedTiers) do
-    local btn = Instance.new("TextButton", main)
-    btn.Position = UDim2.fromScale(0.05,y)
-    btn.Size = UDim2.fromScale(0.9,0.07)
-    btn.Text = tier..": OFF"
-    btn.BackgroundColor3 = Color3.fromRGB(120,0,0)
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.TextScaled = true
-    Instance.new("UICorner", btn)
-
-    btn.MouseButton1Click:Connect(function()
-        selectedTiers[tier] = not selectedTiers[tier]
-        btn.Text = tier..": "..(selectedTiers[tier] and "ON" or "OFF")
-        btn.BackgroundColor3 = selectedTiers[tier] and Color3.fromRGB(0,150,90) or Color3.fromRGB(120,0,0)
-    end)
-
-    y += 0.08
-end
+local tokenBox = input("Telegram Bot Token",0.28)
+local idBox = input("Telegram User ID",0.40)
 
 -- TEST
 local test = Instance.new("TextButton", main)
-test.Position = UDim2.fromScale(0.05,0.72)
-test.Size = UDim2.fromScale(0.4,0.1)
+test.Position = UDim2.fromScale(0.08,0.54)
+test.Size = UDim2.fromScale(0.38,0.1)
 test.Text = "TEST NOTIF"
 test.TextScaled = true
-test.BackgroundColor3 = Color3.fromRGB(0,120,80)
+test.BackgroundColor3 = Color3.fromRGB(0,120,90)
+test.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", test)
 
 test.MouseButton1Click:Connect(function()
     BOT_TOKEN = tokenBox.Text
     CHAT_ID = idBox.Text
-    sendTelegram("✅ TEST NOTIFICATION FROM LIXX")
+    sendTelegram("Hallo kak "..player.Name.." 👋\nScript berjalan lancar\nNotif akan masuk 😸✌️")
 end)
 
 -- RUN
 local run = Instance.new("TextButton", main)
-run.Position = UDim2.fromScale(0.55,0.72)
-run.Size = UDim2.fromScale(0.4,0.1)
+run.Position = UDim2.fromScale(0.54,0.54)
+run.Size = UDim2.fromScale(0.38,0.1)
 run.Text = "JALANKAN"
 run.TextScaled = true
-run.BackgroundColor3 = Color3.fromRGB(0,200,120)
+run.BackgroundColor3 = Color3.fromRGB(0,200,130)
+run.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", run)
 
 run.MouseButton1Click:Connect(function()
     BOT_TOKEN = tokenBox.Text
     CHAT_ID = idBox.Text
     enabled = true
-    hookRewards()
-    sendTelegram("🚀 LIXX Fish Notifier AKTIF")
+    hookBackpack()
+    sendTelegram("🚀 LIXX aktif untuk "..player.Name)
 end)
 
 print("✅ LIXX Fish It Notifier Loaded")
