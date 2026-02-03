@@ -1,282 +1,153 @@
--- LIXX Fish It | Telegram Notifier + Fly FIXED + Anti-AFK
--- Executor: Delta / Fluxus / Hydrogen
+-- LIXX Fish It | MOBILE VERSION (Joystick Support)
+-- Fix: Fly tidak freeze & Notif Telegram lancar
 
-if getgenv().LixxFinal then return end
-getgenv().LixxFinal = true
+if getgenv().LixxFinalMobile then return end
+getgenv().LixxFinalMobile = true
 
---------------------------------------------------
--- SERVICES
---------------------------------------------------
 local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
-local request = request or http_request or (syn and syn.request)
+local request = (syn and syn.request) or (http and http.request) or http_request or request
 
 --------------------------------------------------
--- ANTI AFK (Supaya tidak terputus saat mancing lama)
---------------------------------------------------
-task.spawn(function()
-    local vu = game:GetService("VirtualUser")
-    player.Idled:Connect(function()
-        vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    end)
-end)
-
---------------------------------------------------
--- TELEGRAM
+-- TELEGRAM SYSTEM
 --------------------------------------------------
 local BOT_TOKEN = ""
 local CHAT_ID = ""
 local notifierOn = false
-local sent = {}
-
-local TierFilter = {
-    Common = false,
-    Uncommon = false,
-    Legendary = true,
-    Mythic = true,
-    Secret = true
-}
-
-local TierEmoji = {
-    Common = "⚪",
-    Uncommon = "🟢",
-    Legendary = "🟡",
-    Mythic = "🔴",
-    Secret = "🟣"
-}
 
 local function sendTG(msg)
-    if not request then return end
-    request({
-        Url = "https://api.telegram.org/bot"..BOT_TOKEN.."/sendMessage",
-        Method = "POST",
-        Headers = {["Content-Type"] = "application/json"},
-        Body = HttpService:JSONEncode({
-            chat_id = CHAT_ID,
-            text = msg
+    if not request or BOT_TOKEN == "" or CHAT_ID == "" then return end
+    task.spawn(pcall, function()
+        request({
+            Url = "https://api.telegram.org/bot"..BOT_TOKEN.."/sendMessage",
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode({chat_id = CHAT_ID, text = msg})
         })
-    })
-end
-
-local function getTier(name)
-    name = name:lower()
-    if name:find("secret") then return "Secret" end
-    if name:find("mythic") then return "Mythic" end
-    if name:find("legendary") then return "Legendary" end
-    if name:find("uncommon") then return "Uncommon" end
-    return "Common"
-end
-
-local function onFish(obj)
-    if not notifierOn then return end
-    if not obj:IsA("Tool") then return end
-    if sent[obj] then return end
-    sent[obj] = true
-
-    local tier = getTier(obj.Name)
-    if not TierFilter[tier] then return end
-
-    sendTG(
-        TierEmoji[tier].." Fish It Alert\n"..
-        "👤 "..player.Name..
-        "\n🐟 "..obj.Name..
-        "\n⭐ "..tier
-    )
-end
-
-local function hookFish()
-    player.Backpack.ChildAdded:Connect(onFish)
-    if player.Character then
-        player.Character.ChildAdded:Connect(onFish)
-    end
-    player.CharacterAdded:Connect(function(c)
-        c.ChildAdded:Connect(onFish)
     end)
 end
 
+local function onChildAdded(obj)
+    if not notifierOn or not obj:IsA("Tool") then return end
+    local name = obj.Name:lower()
+    if name:find("secret") or name:find("mythic") or name:find("legendary") then
+        sendTG("⭐ IKAN TIER TINGGI!\n👤 User: "..player.Name.."\n🐟 Ikan: "..obj.Name)
+    end
+end
+
+player.Backpack.ChildAdded:Connect(onChildAdded)
+player.CharacterAdded:Connect(function(c) c.ChildAdded:Connect(onChildAdded) end)
+
 --------------------------------------------------
--- FLY SYSTEM (FIXED)
+-- MOBILE FLY SYSTEM (Joystick Compatible)
 --------------------------------------------------
 local flying = false
-local flySpeed = 60
-local lv, ao, att
+local flySpeed = 50
+local bodyVel, bodyGyro
 
 local function stopFly()
     flying = false
-    RunService:UnbindFromRenderStep("LIXX_FLY")
-    if lv then lv:Destroy() lv = nil end
-    if ao then ao:Destroy() ao = nil end
-    if att then att:Destroy() att = nil end
-
+    if bodyVel then bodyVel:Destroy() end
+    if bodyGyro then bodyGyro:Destroy() end
     local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.PlatformStand = false end
+    if hum then 
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
 end
 
 local function startFly()
-    if flying then stopFly() end
     local char = player.Character
-    if not char then return end
-
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum then return end
 
+    stopFly()
     flying = true
     hum.PlatformStand = true
 
-    att = Instance.new("Attachment", hrp)
-    lv = Instance.new("LinearVelocity", hrp)
-    lv.Attachment0 = att
-    lv.MaxForce = math.huge
-    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
-    lv.RelativeTo = Enum.ActuatorRelativeTo.World
+    bodyVel = Instance.new("BodyVelocity", hrp)
+    bodyVel.MaxForce = Vector3.new(1,1,1) * 9e9
+    bodyVel.Velocity = Vector3.new(0,0,0)
 
-    ao = Instance.new("AlignOrientation", hrp)
-    ao.Attachment0 = att
-    ao.MaxTorque = math.huge
-    ao.Responsiveness = 200
-    ao.Mode = Enum.OrientationControlMode.OneAttachment
+    bodyGyro = Instance.new("BodyGyro", hrp)
+    bodyGyro.MaxTorque = Vector3.new(1,1,1) * 9e9
+    bodyGyro.P = 3000
 
-    RunService:BindToRenderStep("LIXX_FLY", Enum.RenderPriority.Character.Value, function()
-        if not flying or not hrp or not lv then return end
-        local cam = workspace.CurrentCamera
-        local dir = Vector3.new(0,0,0)
-
-        if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0,1,0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.new(0,1,0) end
-
-        if dir.Magnitude > 0 then
-            lv.VectorVelocity = dir.Unit * flySpeed
-        else
-            lv.VectorVelocity = Vector3.new(0,0,0)
+    task.spawn(function()
+        while flying and hrp and char.Parent do
+            local camCF = workspace.CurrentCamera.CFrame
+            -- Deteksi gerakan dari Joystick Android
+            local moveDir = hum.MoveDirection 
+            
+            if moveDir.Magnitude > 0 then
+                -- Terbang ke arah joystick + kamera
+                bodyVel.Velocity = moveDir * flySpeed
+            else
+                -- Melayang di tempat (tidak jatuh)
+                bodyVel.Velocity = Vector3.new(0, 0.1, 0)
+            end
+            
+            bodyGyro.CFrame = camCF
+            task.wait()
         end
-        ao.CFrame = cam.CFrame
+        stopFly()
     end)
 end
 
 --------------------------------------------------
--- UI
+-- UI SEDERHANA (Mudah di Klik di HP)
 --------------------------------------------------
-local gui = Instance.new("ScreenGui", player.PlayerGui)
-gui.ResetOnSpawn = false
+local sg = Instance.new("ScreenGui", player.PlayerGui)
+local frame = Instance.new("Frame", sg)
+frame.Size = UDim2.fromOffset(200, 220)
+frame.Position = UDim2.new(0.5, -100, 0.2, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Active = true
+frame.Draggable = true
 
-local logo = Instance.new("TextButton", gui)
-logo.Size = UDim2.fromScale(0.06,0.08)
-logo.Position = UDim2.fromScale(0.01,0.35)
-logo.Text = "LIXX"
-logo.TextScaled = true
-logo.Font = Enum.Font.GothamBlack
-logo.BackgroundColor3 = Color3.fromRGB(0,180,120)
-logo.TextColor3 = Color3.new(1,1,1)
-Instance.new("UICorner", logo)
-
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.fromScale(0.36,0.6)
-main.Position = UDim2.fromScale(0.32,0.2)
-main.BackgroundColor3 = Color3.fromRGB(10,30,22)
-main.Active = true
-main.Draggable = true
-main.Visible = true
-Instance.new("UICorner", main)
-
-logo.MouseButton1Click:Connect(function()
-    main.Visible = not main.Visible
-end)
-
-local close = Instance.new("TextButton", main)
-close.Text = "❌"
-close.Size = UDim2.fromScale(0.1,0.07)
-close.Position = UDim2.fromScale(0.88,0.02)
-close.BackgroundTransparency = 1
-close.TextScaled = true
-close.MouseButton1Click:Connect(function()
-    main.Visible = false
-end)
-
-local title = Instance.new("TextLabel", main)
-title.Size = UDim2.fromScale(1,0.1)
-title.Text = "LIXX Fish It Utility"
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.TextColor3 = Color3.fromRGB(0,255,160)
-title.BackgroundTransparency = 1
-
-local function box(ph,y)
-    local b = Instance.new("TextBox", main)
-    b.Position = UDim2.fromScale(0.08,y)
-    b.Size = UDim2.fromScale(0.84,0.07)
-    b.PlaceholderText = ph
-    b.Text = ""
-    b.TextScaled = true
-    b.BackgroundColor3 = Color3.fromRGB(30,70,55)
-    b.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", b)
-    return b
+local function createInput(place, y)
+    local i = Instance.new("TextBox", frame)
+    i.PlaceholderText = place
+    i.Size = UDim2.new(0.9, 0, 0.15, 0)
+    i.Position = UDim2.new(0.05, 0, y, 0)
+    i.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    i.TextColor3 = Color3.new(1,1,1)
+    return i
 end
 
-local tokenBox = box("Telegram Bot Token",0.12)
-local idBox = box("Telegram User ID",0.21)
+local tInp = createInput("Token Bot", 0.1)
+local cInp = createInput("Chat ID", 0.3)
 
-local test = Instance.new("TextButton", main)
-test.Position = UDim2.fromScale(0.08,0.3)
-test.Size = UDim2.fromScale(0.38,0.08)
-test.Text = "TEST NOTIF"
-test.TextScaled = true
-test.BackgroundColor3 = Color3.fromRGB(0,120,90)
-Instance.new("UICorner", test)
-
-test.MouseButton1Click:Connect(function()
-    BOT_TOKEN = tokenBox.Text
-    CHAT_ID = idBox.Text
-    sendTG("Hallo kak "..player.Name.." 👋\nLIXX script aktif!")
-end)
-
-local run = Instance.new("TextButton", main)
-run.Position = UDim2.fromScale(0.54,0.3)
-run.Size = UDim2.fromScale(0.38,0.08)
-run.Text = "AKTIFKAN NOTIF"
-run.TextScaled = true
-run.BackgroundColor3 = Color3.fromRGB(0,200,140)
-Instance.new("UICorner", run)
-
-run.MouseButton1Click:Connect(function()
-    BOT_TOKEN = tokenBox.Text
-    CHAT_ID = idBox.Text
+local btnNotif = Instance.new("TextButton", frame)
+btnNotif.Text = "AKTIFKAN NOTIF"
+btnNotif.Size = UDim2.new(0.9, 0, 0.2, 0)
+btnNotif.Position = UDim2.new(0.05, 0, 0.5, 0)
+btnNotif.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+btnNotif.MouseButton1Click:Connect(function()
+    BOT_TOKEN = tInp.Text
+    CHAT_ID = cInp.Text
     notifierOn = true
-    hookFish()
-    sendTG("🚀 LIXX Notifier aktif untuk "..player.Name)
+    sendTG("🚀 Notifier Aktif di Mobile!")
+    btnNotif.Text = "NOTIF ON ✅"
 end)
 
-local flyBtn = Instance.new("TextButton", main)
-flyBtn.Position = UDim2.fromScale(0.08,0.42)
-flyBtn.Size = UDim2.fromScale(0.84,0.08)
-flyBtn.Text = "FLY : OFF"
-flyBtn.TextScaled = true
-flyBtn.BackgroundColor3 = Color3.fromRGB(40,140,100)
-Instance.new("UICorner", flyBtn)
-
-flyBtn.MouseButton1Click:Connect(function()
-    flying = not flying
-    flyBtn.Text = flying and "FLY : ON" or "FLY : OFF"
-    if flying then startFly() else stopFly() end
-end)
-
-local speedBox = box("Fly Speed (Default 60)",0.52)
-speedBox.FocusLost:Connect(function()
-    local v = tonumber(speedBox.Text)
-    if v and v >= 10 and v <= 300 then
-        flySpeed = v
+local btnFly = Instance.new("TextButton", frame)
+btnFly.Text = "FLY: OFF"
+btnFly.Size = UDim2.new(0.9, 0, 0.2, 0)
+btnFly.Position = UDim2.new(0.05, 0, 0.75, 0)
+btnFly.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+btnFly.MouseButton1Click:Connect(function()
+    if flying then
+        stopFly()
+        btnFly.Text = "FLY: OFF"
+        btnFly.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+    else
+        startFly()
+        btnFly.Text = "FLY: ON"
+        btnFly.BackgroundColor3 = Color3.fromRGB(0, 0, 150)
     end
 end)
-
-print("✅ LIXX FINAL LOADED | FLY & ANTI-AFK FIXED")
