@@ -1,9 +1,12 @@
--- LIXX Fish It | Telegram Notifier + Fly
--- Executor: Delta / Fluxus
+-- LIXX Fish It | Telegram Notifier + Fly FIX
+-- Executor: Delta / Fluxus / Hydrogen
 
-if getgenv().LixxUltimate then return end
-getgenv().LixxUltimate = true
+if getgenv().LixxFinal then return end
+getgenv().LixxFinal = true
 
+--------------------------------------------------
+-- SERVICES
+--------------------------------------------------
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -11,10 +14,10 @@ local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
 local request = request or http_request or (syn and syn.request)
-if not request then return warn("HTTP not supported") end
+if not request then return warn("HTTP executor required") end
 
 --------------------------------------------------
--- TELEGRAM CONFIG
+-- TELEGRAM
 --------------------------------------------------
 local BOT_TOKEN = ""
 local CHAT_ID = ""
@@ -69,62 +72,80 @@ local function onFish(obj)
 
     sendTG(
         TierEmoji[tier].." Fish It Alert\n"..
-        "Player: "..player.Name..
-        "\nFish: "..obj.Name..
-        "\nTier: "..tier
+        "👤 "..player.Name..
+        "\n🐟 "..obj.Name..
+        "\n⭐ "..tier
     )
 end
 
 local function hookFish()
+    player.Backpack.ChildAdded:Connect(onFish)
     if player.Character then
         player.Character.ChildAdded:Connect(onFish)
     end
     player.CharacterAdded:Connect(function(c)
         c.ChildAdded:Connect(onFish)
     end)
-    player.Backpack.ChildAdded:Connect(onFish)
 end
 
 --------------------------------------------------
--- FLY SYSTEM
+-- FLY SYSTEM (ANTI FREEZE)
 --------------------------------------------------
 local flying = false
 local flySpeed = 60
-local bv, bg
+local lv, ao, att
 
 local function startFly()
     local char = player.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
+    if not char then return end
 
-    bv = Instance.new("BodyVelocity", hrp)
-    bv.MaxForce = Vector3.new(9e9,9e9,9e9)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
 
-    bg = Instance.new("BodyGyro", hrp)
-    bg.MaxTorque = Vector3.new(9e9,9e9,9e9)
-    bg.CFrame = hrp.CFrame
+    hum.PlatformStand = true
+
+    att = Instance.new("Attachment", hrp)
+
+    lv = Instance.new("LinearVelocity", hrp)
+    lv.Attachment0 = att
+    lv.MaxForce = math.huge
+    lv.RelativeTo = Enum.ActuatorRelativeTo.World
+
+    ao = Instance.new("AlignOrientation", hrp)
+    ao.Attachment0 = att
+    ao.MaxTorque = math.huge
+    ao.Responsiveness = 200
 
     RunService:BindToRenderStep("LIXX_FLY", 0, function()
         if not flying then return end
         local cam = workspace.CurrentCamera
-        local move = Vector3.zero
+        local dir = Vector3.zero
 
-        if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.new(0,1,0) end
 
-        bv.Velocity = move * flySpeed
-        bg.CFrame = cam.CFrame
+        if dir.Magnitude > 0 then
+            dir = dir.Unit * flySpeed
+        end
+
+        lv.VectorVelocity = dir
+        ao.CFrame = cam.CFrame
     end)
 end
 
 local function stopFly()
     RunService:UnbindFromRenderStep("LIXX_FLY")
-    if bv then bv:Destroy() end
-    if bg then bg:Destroy() end
+    if lv then lv:Destroy() end
+    if ao then ao:Destroy() end
+    if att then att:Destroy() end
+
+    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.PlatformStand = false end
 end
 
 --------------------------------------------------
@@ -138,18 +159,17 @@ local logo = Instance.new("TextButton", gui)
 logo.Size = UDim2.fromScale(0.06,0.08)
 logo.Position = UDim2.fromScale(0.01,0.35)
 logo.Text = "LIXX"
-logo.Font = Enum.Font.GothamBlack
 logo.TextScaled = true
+logo.Font = Enum.Font.GothamBlack
 logo.BackgroundColor3 = Color3.fromRGB(0,180,120)
 logo.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", logo)
 
 -- MAIN
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.fromScale(0.36,0.55)
-main.Position = UDim2.fromScale(0.32,0.22)
-main.BackgroundColor3 = Color3.fromRGB(12,30,22)
-main.BorderSizePixel = 0
+main.Size = UDim2.fromScale(0.36,0.6)
+main.Position = UDim2.fromScale(0.32,0.2)
+main.BackgroundColor3 = Color3.fromRGB(10,30,22)
 main.Active = true
 main.Draggable = true
 Instance.new("UICorner", main)
@@ -161,7 +181,7 @@ end)
 -- CLOSE
 local close = Instance.new("TextButton", main)
 close.Text = "❌"
-close.Size = UDim2.fromScale(0.1,0.08)
+close.Size = UDim2.fromScale(0.1,0.07)
 close.Position = UDim2.fromScale(0.88,0.02)
 close.BackgroundTransparency = 1
 close.TextScaled = true
@@ -171,14 +191,14 @@ end)
 
 -- TITLE
 local title = Instance.new("TextLabel", main)
-title.Size = UDim2.fromScale(1,0.12)
+title.Size = UDim2.fromScale(1,0.1)
 title.Text = "LIXX Fish It Utility"
 title.TextScaled = true
 title.Font = Enum.Font.GothamBold
-title.TextColor3 = Color3.fromRGB(0,255,150)
+title.TextColor3 = Color3.fromRGB(0,255,160)
 title.BackgroundTransparency = 1
 
--- INPUT
+-- INPUT BOX
 local function box(ph,y)
     local b = Instance.new("TextBox", main)
     b.Position = UDim2.fromScale(0.08,y)
@@ -191,12 +211,12 @@ local function box(ph,y)
     return b
 end
 
-local tokenBox = box("Telegram Bot Token",0.15)
-local idBox = box("Telegram User ID",0.24)
+local tokenBox = box("Telegram Bot Token",0.12)
+local idBox = box("Telegram User ID",0.21)
 
 -- TEST
 local test = Instance.new("TextButton", main)
-test.Position = UDim2.fromScale(0.08,0.33)
+test.Position = UDim2.fromScale(0.08,0.3)
 test.Size = UDim2.fromScale(0.38,0.08)
 test.Text = "TEST NOTIF"
 test.TextScaled = true
@@ -206,16 +226,16 @@ Instance.new("UICorner", test)
 test.MouseButton1Click:Connect(function()
     BOT_TOKEN = tokenBox.Text
     CHAT_ID = idBox.Text
-    sendTG("Hallo kak "..player.Name.." 👋\nScript LIXX berjalan 😸✌️")
+    sendTG("Hallo kak "..player.Name.." 👋\nLIXX script aktif 😸✌️")
 end)
 
 -- RUN
 local run = Instance.new("TextButton", main)
-run.Position = UDim2.fromScale(0.54,0.33)
+run.Position = UDim2.fromScale(0.54,0.3)
 run.Size = UDim2.fromScale(0.38,0.08)
 run.Text = "AKTIFKAN NOTIF"
 run.TextScaled = true
-run.BackgroundColor3 = Color3.fromRGB(0,200,130)
+run.BackgroundColor3 = Color3.fromRGB(0,200,140)
 Instance.new("UICorner", run)
 
 run.MouseButton1Click:Connect(function()
@@ -228,11 +248,11 @@ end)
 
 -- FLY TOGGLE
 local flyBtn = Instance.new("TextButton", main)
-flyBtn.Position = UDim2.fromScale(0.08,0.45)
-flyBtn.Size = UDim2.fromScale(0.84,0.09)
+flyBtn.Position = UDim2.fromScale(0.08,0.42)
+flyBtn.Size = UDim2.fromScale(0.84,0.08)
 flyBtn.Text = "FLY : OFF"
 flyBtn.TextScaled = true
-flyBtn.BackgroundColor3 = Color3.fromRGB(40,120,90)
+flyBtn.BackgroundColor3 = Color3.fromRGB(40,140,100)
 Instance.new("UICorner", flyBtn)
 
 flyBtn.MouseButton1Click:Connect(function()
@@ -241,4 +261,13 @@ flyBtn.MouseButton1Click:Connect(function()
     if flying then startFly() else stopFly() end
 end)
 
-print("✅ LIXX NOTIFIER + FLY LOADED")
+-- SPEED SLIDER (TEXT)
+local speedBox = box("Fly Speed (Default 60)",0.52)
+speedBox.FocusLost:Connect(function()
+    local v = tonumber(speedBox.Text)
+    if v and v >= 10 and v <= 300 then
+        flySpeed = v
+    end
+end)
+
+print("✅ LIXX FINAL LOADED | FLY FIXED")
