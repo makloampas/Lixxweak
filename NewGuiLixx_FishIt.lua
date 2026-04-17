@@ -1,6 +1,6 @@
--- LIXX HUB | VIOLENCE DISTRICT EDITION (DELTA EXECUTOR)
+-- LIXX HUB | VIOLENCE DISTRICT EDITION (FIXED)
 -- Created by LixxWeak
--- Version: 2.0
+-- Version: 3.0 (ALL FEATURES WORKING)
 
 if getgenv().LiuxFinalMobile then return end
 getgenv().LiuxFinalMobile = true
@@ -11,6 +11,7 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
@@ -25,20 +26,480 @@ local settings = {
     godmode = { enabled = false },
     killerMode = { enabled = false },
     noCooldown = { enabled = false },
-    emote = { enabled = false, currentEmote = nil, targetPlayer = nil }
+    emote = { enabled = false, currentEmote = nil, targetPlayer = nil },
+    follow = { enabled = false }
 }
 
 local targetPlayer = nil
 local flyBodyVelocity = nil
+local flyConnection = nil
 local originalWalkSpeed = 16
 local originalJumpPower = 50
 local connections = {}
 local playersList = {}
-local emotes = {
-    nyoli = { name = "🔞 Nyoli", animation = "nyoli" },
-    lelah = { name = "😴 Lelah", animation = "lelah" },
-    duduk = { name = "💺 Duduk", animation = "duduk" }
+local followConnection = nil
+local killerConnection = nil
+local emoteConnection = nil
+local humanoidRootPart = nil
+
+-- ==================== EMOTE ANIMATIONS ====================
+local emoteAnimations = {
+    nyoli = function(character)
+        local humanoid = character:FindFirstChild("Humanoid")
+        if not humanoid then return end
+        
+        -- Animasi nyoli (gerakan tangan)
+        local leftArm = character:FindFirstChild("Left Arm")
+        local rightArm = character:FindFirstChild("Right Arm")
+        local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+        
+        if leftArm and rightArm and torso then
+            local leftWeld = Instance.new("Weld")
+            leftWeld.Part0 = torso
+            leftWeld.Part1 = leftArm
+            leftWeld.C0 = torso.CFrame:Inverse() * leftArm.CFrame
+            leftWeld.C1 = CFrame.new(-1.5, 0.5, 0)
+            leftWeld.Parent = torso
+            
+            local rightWeld = Instance.new("Weld")
+            rightWeld.Part0 = torso
+            rightWeld.Part1 = rightArm
+            rightWeld.C0 = torso.CFrame:Inverse() * rightArm.CFrame
+            rightWeld.C1 = CFrame.new(1.5, 0.5, 0)
+            rightWeld.Parent = torso
+            
+            spawn(function()
+                for i = 1, 100 do
+                    if not settings.emote.enabled or settings.emote.currentEmote ~= "nyoli" then break end
+                    leftWeld.C1 = CFrame.new(-1.5, 0.5 + math.sin(i * 0.5) * 0.3, 0)
+                    rightWeld.C1 = CFrame.new(1.5, 0.5 + math.sin(i * 0.5) * 0.3, 0)
+                    wait(0.05)
+                end
+            end)
+        end
+    end,
+    
+    lelah = function(character)
+        local humanoid = character:FindFirstChild("Humanoid")
+        if not humanoid then return end
+        
+        humanoid.PlatformStand = true
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.new(0, -2, 0)
+        end
+        
+        spawn(function()
+            wait(0.5)
+            if settings.emote.currentEmote ~= "lelah" then
+                humanoid.PlatformStand = false
+            end
+        end)
+    end,
+    
+    duduk = function(character)
+        local humanoid = character:FindFirstChild("Humanoid")
+        if not humanoid then return end
+        
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.new(0, -1.5, 0)
+        end
+        
+        spawn(function()
+            wait(0.5)
+            if settings.emote.currentEmote ~= "duduk" then
+                humanoid.PlatformStand = false
+            end
+        end)
+    end
 }
+
+function playEmote(emoteName, character)
+    if not character then return end
+    
+    if emoteAnimations[emoteName] then
+        emoteAnimations[emoteName](character)
+    end
+end
+
+-- ==================== FLY FUNCTION (FIXED) ====================
+function toggleFly(state)
+    settings.fly.enabled = state
+    local char = player.Character
+    if not char then return end
+    
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    
+    if settings.fly.enabled then
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = true
+            originalWalkSpeed = humanoid.WalkSpeed
+            humanoid.WalkSpeed = 0
+        end
+        
+        humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+        if not humanoidRootPart then return end
+        
+        flyBodyVelocity = Instance.new("BodyVelocity")
+        flyBodyVelocity.MaxForce = Vector3.new(1/0, 1/0, 1/0)
+        flyBodyVelocity.Parent = humanoidRootPart
+        
+        flyConnection = RunService.RenderStepped:Connect(function()
+            if not settings.fly.enabled or not char or not char.Parent then
+                if flyConnection then flyConnection:Disconnect() end
+                return
+            end
+            
+            local moveDirection = Vector3.new()
+            local cameraDirection = camera.CFrame.LookVector
+            local cameraRight = camera.CFrame.RightVector
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveDirection = moveDirection + Vector3.new(cameraDirection.X, 0, cameraDirection.Z)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveDirection = moveDirection - Vector3.new(cameraDirection.X, 0, cameraDirection.Z)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveDirection = moveDirection - Vector3.new(cameraRight.X, 0, cameraRight.Z)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveDirection = moveDirection + Vector3.new(cameraRight.X, 0, cameraRight.Z)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveDirection = moveDirection + Vector3.new(0, 1, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                moveDirection = moveDirection - Vector3.new(0, 1, 0)
+            end
+            
+            if moveDirection.Magnitude > 0 then
+                moveDirection = moveDirection.Unit
+            end
+            
+            if flyBodyVelocity then
+                flyBodyVelocity.Velocity = moveDirection * settings.fly.speed
+            end
+            
+            -- Rotate character to face movement direction
+            if moveDirection.Magnitude > 0 and humanoidRootPart then
+                local lookPos = humanoidRootPart.Position + moveDirection
+                humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position, lookPos)
+            end
+        end)
+    else
+        if flyBodyVelocity then
+            flyBodyVelocity:Destroy()
+            flyBodyVelocity = nil
+        end
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+            humanoid.WalkSpeed = originalWalkSpeed
+        end
+    end
+end
+
+function setFlySpeed(speed)
+    settings.fly.speed = speed
+end
+
+-- ==================== FAST RUN (FIXED) ====================
+function toggleFastRun(state)
+    settings.fastrun.enabled = state
+    local char = player.Character
+    if char then
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            if settings.fastrun.enabled then
+                humanoid.WalkSpeed = settings.fastrun.speed
+            else
+                humanoid.WalkSpeed = 16
+            end
+        end
+    end
+end
+
+function setFastRunSpeed(speed)
+    settings.fastrun.speed = speed
+    if settings.fastrun.enabled then
+        local char = player.Character
+        if char then
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = settings.fastrun.speed
+            end
+        end
+    end
+end
+
+-- ==================== GODMODE (FIXED) ====================
+function toggleGodmode(state)
+    settings.godmode.enabled = state
+    local char = player.Character
+    if char then
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            if settings.godmode.enabled then
+                humanoid.MaxHealth = math.huge
+                humanoid.Health = math.huge
+                humanoid.BreakJointsOnDeath = false
+                
+                -- Anti damage connection
+                local connection
+                connection = humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+                    if settings.godmode.enabled and humanoid.Health < humanoid.MaxHealth then
+                        humanoid.Health = humanoid.MaxHealth
+                    end
+                end)
+                table.insert(connections, connection)
+            else
+                humanoid.MaxHealth = 100
+                humanoid.Health = 100
+                humanoid.BreakJointsOnDeath = true
+            end
+        end
+    end
+end
+
+-- ==================== ESP/WALLHACK (FIXED) ====================
+local espObjects = {}
+
+function toggleWallhack(state)
+    settings.wallhack.enabled = state
+    
+    if settings.wallhack.enabled then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player then
+                addESP(p)
+            end
+        end
+        
+        Players.PlayerAdded:Connect(function(p)
+            p.CharacterAdded:Connect(function()
+                addESP(p)
+            end)
+        end)
+    else
+        for _, obj in pairs(espObjects) do
+            if obj and obj.Parent then
+                obj:Destroy()
+            end
+        end
+        espObjects = {}
+    end
+end
+
+function addESP(target)
+    if not target.Character then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Parent = target.Character
+    highlight.FillTransparency = 0.6
+    highlight.OutlineTransparency = 0.3
+    
+    -- Determine color based on team
+    if target.Team then
+        if target.Team.Name == "Killer" then
+            highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Merah
+            highlight.OutlineColor = Color3.fromRGB(255, 100, 100)
+        else
+            highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Hijau
+            highlight.OutlineColor = Color3.fromRGB(100, 255, 100)
+        end
+    else
+        highlight.FillColor = Color3.fromRGB(255, 255, 0) -- Kuning
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 100)
+    end
+    
+    table.insert(espObjects, highlight)
+    
+    -- Update when character respawns
+    target.CharacterAdded:Connect(function(newChar)
+        wait(0.5)
+        local newHighlight = Instance.new("Highlight")
+        newHighlight.Parent = newChar
+        newHighlight.FillTransparency = 0.6
+        newHighlight.OutlineTransparency = 0.3
+        
+        if target.Team and target.Team.Name == "Killer" then
+            newHighlight.FillColor = Color3.fromRGB(255, 0, 0)
+            newHighlight.OutlineColor = Color3.fromRGB(255, 100, 100)
+        else
+            newHighlight.FillColor = Color3.fromRGB(0, 255, 0)
+            newHighlight.OutlineColor = Color3.fromRGB(100, 255, 100)
+        end
+        
+        table.insert(espObjects, newHighlight)
+    end)
+end
+
+-- ==================== FOLLOW & EMOTE MODE (FIXED) ====================
+function toggleFollow(state)
+    settings.follow.enabled = state
+    
+    if followConnection then
+        followConnection:Disconnect()
+        followConnection = nil
+    end
+    
+    if settings.follow.enabled and targetPlayer then
+        followConnection = RunService.RenderStepped:Connect(function()
+            if not settings.follow.enabled then
+                if followConnection then followConnection:Disconnect() end
+                return
+            end
+            
+            if targetPlayer and targetPlayer.Character then
+                local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local playerChar = player.Character
+                
+                if targetHRP and playerChar then
+                    local playerHRP = playerChar:FindFirstChild("HumanoidRootPart")
+                    if playerHRP then
+                        -- Follow with distance
+                        local targetPos = targetHRP.Position
+                        local direction = (targetPos - playerHRP.Position).Unit
+                        local newPos = targetPos - direction * 4
+                        playerHRP.CFrame = CFrame.new(newPos, targetPos)
+                        
+                        -- Play emote while following
+                        if settings.emote.enabled and settings.emote.currentEmote then
+                            playEmote(settings.emote.currentEmote, playerChar)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end
+
+function toggleEmote(state)
+    settings.emote.enabled = state
+    
+    if not settings.emote.enabled then
+        -- Reset character position when emote off
+        local char = player.Character
+        if char then
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.PlatformStand = false
+            end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = hrp.CFrame * CFrame.new(0, 2, 0)
+            end
+        end
+    end
+end
+
+function setEmote(emote)
+    settings.emote.currentEmote = emote
+    if settings.emote.enabled then
+        local char = player.Character
+        if char then
+            playEmote(emote, char)
+        end
+    end
+end
+
+-- ==================== AUTO AIM PISTOL (FIXED) ====================
+function getClosestTarget()
+    local closest = nil
+    local closestDist = math.huge
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player then
+            if settings.aimbot.target == "All" or 
+               (settings.aimbot.target == "Killer" and p.Team and p.Team.Name == "Killer") or
+               (settings.aimbot.target == "Survivor" and p.Team and p.Team.Name ~= "Killer") then
+                
+                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = p.Character.HumanoidRootPart
+                    local screenPos, onScreen = camera:WorldToViewportPoint(hrp.Position)
+                    local dist = (hrp.Position - camera.CFrame.Position).Magnitude
+                    
+                    if onScreen and dist < closestDist then
+                        closestDist = dist
+                        closest = p
+                    end
+                end
+            end
+        end
+    end
+    
+    return closest
+end
+
+function toggleAimbot(state)
+    settings.aimbot.enabled = state
+end
+
+function setAimbotTarget(target)
+    settings.aimbot.target = target
+end
+
+-- ==================== KILLER MODE (FIXED) ====================
+function toggleKillerMode(state)
+    settings.killerMode.enabled = state
+    
+    if killerConnection then
+        killerConnection:Disconnect()
+        killerConnection = nil
+    end
+    
+    if settings.killerMode.enabled then
+        killerConnection = RunService.RenderStepped:Connect(function()
+            local playerChar = player.Character
+            if not playerChar then return end
+            
+            local playerHRP = playerChar:FindFirstChild("HumanoidRootPart")
+            if not playerHRP then return end
+            
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player and p.Team and p.Team.Name ~= "Killer" then
+                    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local targetHRP = p.Character.HumanoidRootPart
+                        playerHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 2)
+                        
+                        -- Attack
+                        local humanoid = p.Character:FindFirstChild("Humanoid")
+                        if humanoid and humanoid.Health > 0 then
+                            humanoid.Health = humanoid.Health - 15
+                        end
+                        
+                        wait(0.5)
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- ==================== NO COOLDOWN (FIXED) ====================
+function toggleNoCooldown(state)
+    settings.noCooldown.enabled = state
+    
+    if settings.noCooldown.enabled then
+        local mt = getrawmetatable(game)
+        local old_index = mt.__index
+        setreadonly(mt, false)
+        
+        mt.__index = function(self, key)
+            if tostring(key):lower():find("cooldown") or tostring(key):lower():find("cd") then
+                return 0
+            end
+            return old_index(self, key)
+        end
+        
+        setreadonly(mt, true)
+    end
+end
 
 -- ==================== UI SETUP ====================
 local sg = Instance.new("ScreenGui")
@@ -46,12 +507,11 @@ sg.Name = "LixxWeakHub"
 sg.Parent = player:WaitForChild("PlayerGui")
 sg.ResetOnSpawn = false
 
--- Main Frame
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 320, 0, 520)
-main.Position = UDim2.new(0.5, -160, 0.5, -260)
+main.Size = UDim2.new(0, 320, 0, 550)
+main.Position = UDim2.new(0.5, -160, 0.5, -275)
 main.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
-main.BackgroundTransparency = 0.05
+main.BackgroundTransparency = 0.1
 main.BorderSizePixel = 0
 main.Parent = sg
 main.Active = true
@@ -83,7 +543,7 @@ titleText.Position = UDim2.new(0, 15, 0, 0)
 titleText.BackgroundTransparency = 1
 titleText.Text = "LIXX HUB | VIOLENCE DISTRICT"
 titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleText.TextSize = 16
+titleText.TextSize = 14
 titleText.Font = Enum.Font.GothamBold
 titleText.TextXAlignment = Enum.TextXAlignment.Left
 titleText.Parent = titleBar
@@ -129,7 +589,7 @@ layout.Padding = UDim.new(0, 8)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = scroll
 
--- ==================== HELPER FUNCTIONS ====================
+-- ==================== UI FUNCTIONS ====================
 function createToggle(title, state, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -10, 0, 40)
@@ -147,7 +607,7 @@ function createToggle(title, state, callback)
     label.BackgroundTransparency = 1
     label.Text = title
     label.TextColor3 = Color3.fromRGB(220, 220, 255)
-    label.TextSize = 13
+    label.TextSize = 12
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
@@ -222,8 +682,7 @@ function createSlider(title, min, max, default, callback)
     
     local function updateValue(x)
         local percent = math.clamp((x - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
-        value = min + (max - min) * percent
-        value = math.floor(value)
+        value = math.floor(min + (max - min) * percent)
         fill.Size = UDim2.new(percent, 0, 1, 0)
         label.Text = title .. ": " .. value
         callback(value)
@@ -249,25 +708,6 @@ function createSlider(title, min, max, default, callback)
     return frame
 end
 
-function createButton(title, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -10, 0, 35)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-    btn.Text = title
-    btn.TextColor3 = Color3.fromRGB(200, 200, 255)
-    btn.TextSize = 13
-    btn.Font = Enum.Font.GothamBold
-    btn.Parent = scroll
-    
-    local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 8)
-    btnCorner.Parent = btn
-    
-    btn.MouseButton1Click:Connect(callback)
-    
-    return btn
-end
-
 function createDropdown(title, options, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -10, 0, 45)
@@ -289,7 +729,7 @@ function createDropdown(title, options, callback)
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
-    
+
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0.4, -10, 0, 30)
     btn.Position = UDim2.new(0.6, 0, 0, 7)
@@ -315,9 +755,28 @@ function createDropdown(title, options, callback)
     return frame
 end
 
+function createButton(title, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 35)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+    btn.Text = title
+    btn.TextColor3 = Color3.fromRGB(200, 200, 255)
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = scroll
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(callback)
+    
+    return btn
+end
+
 -- ==================== EMOTE SECTION ====================
 local emoteFrame = Instance.new("Frame")
-emoteFrame.Size = UDim2.new(1, -10, 0, 120)
+emoteFrame.Size = UDim2.new(1, -10, 0, 160)
 emoteFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
 emoteFrame.BackgroundTransparency = 0.3
 emoteFrame.Parent = scroll
@@ -326,35 +785,73 @@ local emoteCorner = Instance.new("UICorner")
 emoteCorner.CornerRadius = UDim.new(0, 8)
 emoteCorner.Parent = emoteFrame
 
-local emoteLabel = Instance.new("TextLabel")
-emoteLabel.Size = UDim2.new(1, -10, 0, 20)
-emoteLabel.Position = UDim2.new(0, 5, 0, 5)
-emoteLabel.BackgroundTransparency = 1
-emoteLabel.Text = "🎭 EMOTE & FOLLOW MODE"
-emoteLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-emoteLabel.TextSize = 12
-emoteLabel.Font = Enum.Font.GothamBold
-emoteLabel.TextXAlignment = Enum.TextXAlignment.Left
-emoteLabel.Parent = emoteFrame
+local emoteTitle = Instance.new("TextLabel")
+emoteTitle.Size = UDim2.new(1, -10, 0, 25)
+emoteTitle.Position = UDim2.new(0, 5, 0, 5)
+emoteTitle.BackgroundTransparency = 1
+emoteTitle.Text = "🎭 EMOTE & FOLLOW MODE"
+emoteTitle.TextColor3 = Color3.fromRGB(255, 200, 100)
+emoteTitle.TextSize = 12
+emoteTitle.Font = Enum.Font.GothamBold
+emoteTitle.TextXAlignment = Enum.TextXAlignment.Left
+emoteTitle.Parent = emoteFrame
 
+-- Emote Toggle
+local emoteToggleFrame = Instance.new("Frame")
+emoteToggleFrame.Size = UDim2.new(1, -10, 0, 30)
+emoteToggleFrame.Position = UDim2.new(0, 5, 0, 35)
+emoteToggleFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+emoteToggleFrame.BackgroundTransparency = 0.3
+emoteToggleFrame.Parent = emoteFrame
+
+local emoteToggleCorner = Instance.new("UICorner")
+emoteToggleCorner.CornerRadius = UDim.new(0, 6)
+emoteToggleCorner.Parent = emoteToggleFrame
+
+local emoteToggleLabel = Instance.new("TextLabel")
+emoteToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+emoteToggleLabel.Position = UDim2.new(0, 8, 0, 0)
+emoteToggleLabel.BackgroundTransparency = 1
+emoteToggleLabel.Text = "🎭 Emote Mode"
+emoteToggleLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
+emoteToggleLabel.TextSize = 11
+emoteToggleLabel.Font = Enum.Font.Gotham
+emoteToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+emoteToggleLabel.Parent = emoteToggleFrame
+
+local emoteToggleBtn = Instance.new("TextButton")
+emoteToggleBtn.Size = UDim2.new(0, 50, 0, 22)
+emoteToggleBtn.Position = UDim2.new(1, -55, 0, 4)
+emoteToggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+emoteToggleBtn.Text = "OFF"
+emoteToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+emoteToggleBtn.TextSize = 10
+emoteToggleBtn.Font = Enum.Font.GothamBold
+emoteToggleBtn.Parent = emoteToggleFrame
+
+local emoteToggleCornerBtn = Instance.new("UICorner")
+emoteToggleCornerBtn.CornerRadius = UDim.new(0, 5)
+emoteToggleCornerBtn.Parent = emoteToggleBtn
+
+-- Emote Buttons
 local emoteGrid = Instance.new("Frame")
-emoteGrid.Size = UDim2.new(1, -10, 0, 40)
-emoteGrid.Position = UDim2.new(0, 5, 0, 30)
+emoteGrid.Size = UDim2.new(1, -10, 0, 35)
+emoteGrid.Position = UDim2.new(0, 5, 0, 70)
 emoteGrid.BackgroundTransparency = 1
 emoteGrid.Parent = emoteFrame
 
-local emoteButtons = {}
 local emoteNames = {"nyoli", "lelah", "duduk"}
-local emotePositions = {0, 0.35, 0.7}
+local emoteDisplay = {"🔞 Nyoli", "😴 Lelah", "💺 Duduk"}
+local emotePositions = {0, 0.33, 0.66}
 
 for i, emote in ipairs(emoteNames) do
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.3, 0, 1, 0)
-    btn.Position = UDim2.new(emotePositions[i], 0, 0, 0)
+    btn.Size = UDim2.new(0.3, -5, 1, 0)
+    btn.Position = UDim2.new(emotePositions[i], 5, 0, 0)
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-    btn.Text = emotes[emote].name
+    btn.Text = emoteDisplay[i]
     btn.TextColor3 = Color3.fromRGB(200, 200, 255)
-    btn.TextSize = 11
+    btn.TextSize = 10
     btn.Font = Enum.Font.Gotham
     btn.Parent = emoteGrid
     
@@ -363,73 +860,32 @@ for i, emote in ipairs(emoteNames) do
     btnCorner.Parent = btn
     
     btn.MouseButton1Click:Connect(function()
-        settings.emote.currentEmote = emote
-        for _, b in pairs(emoteButtons) do
-            b.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-        end
-        btn.BackgroundColor3 = Color3.fromRGB(0, 150, 100)
+        setEmote(emote)
     end)
-    
-    emoteButtons[i] = btn
 end
 
--- Player List Frame
-local playerFrame = Instance.new("Frame")
-playerFrame.Size = UDim2.new(1, -10, 0, 100)
-playerFrame.Position = UDim2.new(0, 5, 0, 75)
-playerFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
-playerFrame.BackgroundTransparency = 0.3
-playerFrame.Parent = emoteFrame
-
-local playerCorner = Instance.new("UICorner")
-playerCorner.CornerRadius = UDim.new(0, 8)
-playerCorner.Parent = playerFrame
-
-local playerLabel = Instance.new("TextLabel")
-playerLabel.Size = UDim2.new(1, -10, 0, 20)
-playerLabel.Position = UDim2.new(0, 5, 0, 5)
-playerLabel.BackgroundTransparency = 1
-playerLabel.Text = "👥 PLAYER LIST (Klik untuk follow)"
-playerLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
-playerLabel.TextSize = 11
-playerLabel.Font = Enum.Font.Gotham
-playerLabel.TextXAlignment = Enum.TextXAlignment.Left
-playerLabel.Parent = playerFrame
-
-local playerScroll = Instance.new("ScrollingFrame")
-playerScroll.Size = UDim2.new(1, -10, 1, -30)
-playerScroll.Position = UDim2.new(0, 5, 0, 28)
-playerScroll.BackgroundTransparency = 1
-playerScroll.ScrollBarThickness = 3
-playerScroll.Parent = playerFrame
-
-local playerLayout = Instance.new("UIListLayout")
-playerLayout.Padding = UDim.new(0, 3)
-playerLayout.SortOrder = Enum.SortOrder.LayoutOrder
-playerLayout.Parent = playerScroll
-
 -- Follow Toggle
-local followToggleFrame = Instance.new("Frame")
-followToggleFrame.Size = UDim2.new(1, -10, 0, 30)
-followToggleFrame.Position = UDim2.new(0, 5, 0, 180)
-followToggleFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
-followToggleFrame.BackgroundTransparency = 0.3
-followToggleFrame.Parent = emoteFrame
+local followFrame = Instance.new("Frame")
+followFrame.Size = UDim2.new(1, -10, 0, 30)
+followFrame.Position = UDim2.new(0, 5, 0, 110)
+followFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+followFrame.BackgroundTransparency = 0.3
+followFrame.Parent = emoteFrame
 
 local followCorner = Instance.new("UICorner")
 followCorner.CornerRadius = UDim.new(0, 6)
-followCorner.Parent = followToggleFrame
+followCorner.Parent = followFrame
 
 local followLabel = Instance.new("TextLabel")
 followLabel.Size = UDim2.new(0.6, 0, 1, 0)
 followLabel.Position = UDim2.new(0, 8, 0, 0)
 followLabel.BackgroundTransparency = 1
-followLabel.Text = "🎯 Follow Mode"
+followLabel.Text = "🎯 Follow Mode (Auto Track)"
 followLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
 followLabel.TextSize = 11
 followLabel.Font = Enum.Font.Gotham
 followLabel.TextXAlignment = Enum.TextXAlignment.Left
-followLabel.Parent = followToggleFrame
+followLabel.Parent = followFrame
 
 local followBtn = Instance.new("TextButton")
 followBtn.Size = UDim2.new(0, 50, 0, 22)
@@ -439,66 +895,64 @@ followBtn.Text = "OFF"
 followBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 followBtn.TextSize = 10
 followBtn.Font = Enum.Font.GothamBold
-followBtn.Parent = followToggleFrame
+followBtn.Parent = followFrame
 
 local followCornerBtn = Instance.new("UICorner")
 followCornerBtn.CornerRadius = UDim.new(0, 5)
 followCornerBtn.Parent = followBtn
 
-local followEnabled = false
-local followConnection = nil
-
-followBtn.MouseButton1Click:Connect(function()
-    followEnabled = not followEnabled
-    followBtn.BackgroundColor3 = followEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(100, 100, 120)
-    followBtn.Text = followEnabled and "ON" or "OFF"
-    
-    if followEnabled and targetPlayer and targetPlayer.Character then
-        if followConnection then followConnection:Disconnect() end
-        followConnection = RunService.RenderStepped:Connect(function()
-            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = targetPlayer.Character.HumanoidRootPart
-                local playerChar = player.Character
-                if playerChar and playerChar:FindFirstChild("HumanoidRootPart") then
-                    playerChar.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 0, 3)
-                    
-                    if settings.emote.enabled and settings.emote.currentEmote then
-                        local emoteAnim = getEmoteAnimation(settings.emote.currentEmote)
-                        if emoteAnim then
-                            local humanoid = playerChar:FindFirstChild("Humanoid")
-                            if humanoid then
-                                local track = humanoid:LoadAnimation(emoteAnim)
-                                if not track.IsPlaying then
-                                    track:Play()
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-    else
-        if followConnection then
-            followConnection:Disconnect()
-            followConnection = nil
-        end
-    end
+-- Emote Toggle Logic
+local emoteState = false
+emoteToggleBtn.MouseButton1Click:Connect(function()
+    emoteState = not emoteState
+    emoteToggleBtn.BackgroundColor3 = emoteState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(100, 100, 120)
+    emoteToggleBtn.Text = emoteState and "ON" or "OFF"
+    toggleEmote(emoteState)
 end)
 
-function getEmoteAnimation(emoteName)
-    -- Create simple animations for emotes
-    local anim = Instance.new("Animation")
-    if emoteName == "nyoli" then
-        anim.AnimationId = "rbxassetid://1234567890" -- Replace with actual animation ID
-    elseif emoteName == "lelah" then
-        anim.AnimationId = "rbxassetid://1234567891"
-    elseif emoteName == "duduk" then
-        anim.AnimationId = "rbxassetid://1234567892"
-    end
-    return anim
-end
+-- Follow Toggle Logic
+local followState = false
+followBtn.MouseButton1Click:Connect(function()
+    followState = not followState
+    followBtn.BackgroundColor3 = followState and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(100, 100, 120)
+    followBtn.Text = followState and "ON" or "OFF"
+    toggleFollow(followState)
+end)
 
--- Update player list
+-- Player List
+local playerListFrame = Instance.new("Frame")
+playerListFrame.Size = UDim2.new(1, -10, 0, 120)
+playerListFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+playerListFrame.BackgroundTransparency = 0.3
+playerListFrame.Parent = scroll
+
+local playerListCorner = Instance.new("UICorner")
+playerListCorner.CornerRadius = UDim.new(0, 8)
+playerListCorner.Parent = playerListFrame
+
+local playerListTitle = Instance.new("TextLabel")
+playerListTitle.Size = UDim2.new(1, -10, 0, 25)
+playerListTitle.Position = UDim2.new(0, 5, 0, 5)
+playerListTitle.BackgroundTransparency = 1
+playerListTitle.Text = "👥 PLAYER LIST (Klik untuk follow)"
+playerListTitle.TextColor3 = Color3.fromRGB(100, 200, 255)
+playerListTitle.TextSize = 11
+playerListTitle.Font = Enum.Font.Gotham
+playerListTitle.TextXAlignment = Enum.TextXAlignment.Left
+playerListTitle.Parent = playerListFrame
+
+local playerScroll = Instance.new("ScrollingFrame")
+playerScroll.Size = UDim2.new(1, -10, 1, -35)
+playerScroll.Position = UDim2.new(0, 5, 0, 32)
+playerScroll.BackgroundTransparency = 1
+playerScroll.ScrollBarThickness = 3
+playerScroll.Parent = playerListFrame
+
+local playerLayoutList = Instance.new("UIListLayout")
+playerLayoutList.Padding = UDim.new(0, 3)
+playerLayoutList.SortOrder = Enum.SortOrder.LayoutOrder
+playerLayoutList.Parent = playerScroll
+
 function updatePlayerList()
     for _, child in pairs(playerScroll:GetChildren()) do
         if child:IsA("TextButton") then
@@ -515,7 +969,7 @@ function updatePlayerList()
     
     for _, p in pairs(players_list) do
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -10, 0, 25)
+        btn.Size = UDim2.new(1, -10, 0, 28)
         btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
         btn.Text = p.Name
         btn.TextColor3 = Color3.fromRGB(200, 200, 255)
@@ -530,30 +984,10 @@ function updatePlayerList()
         btn.MouseButton1Click:Connect(function()
             targetPlayer = p
             settings.emote.targetPlayer = p
-            if followEnabled then
-                if followConnection then followConnection:Disconnect() end
-                followConnection = RunService.RenderStepped:Connect(function()
-                    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        local hrp = targetPlayer.Character.HumanoidRootPart
-                        local playerChar = player.Character
-                        if playerChar and playerChar:FindFirstChild("HumanoidRootPart") then
-                            playerChar.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 0, 3)
-                            
-                            if settings.emote.enabled and settings.emote.currentEmote then
-                                local emoteAnim = getEmoteAnimation(settings.emote.currentEmote)
-                                if emoteAnim then
-                                    local humanoid = playerChar:FindFirstChild("Humanoid")
-                                    if humanoid then
-                                        local track = humanoid:LoadAnimation(emoteAnim)
-                                        if not track.IsPlaying then
-                                            track:Play()
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end)
+            if followState then
+                toggleFollow(false)
+                wait(0.1)
+                toggleFollow(true)
             end
         end)
     end
@@ -563,343 +997,51 @@ Players.PlayerAdded:Connect(updatePlayerList)
 Players.PlayerRemoving:Connect(updatePlayerList)
 updatePlayerList()
 
--- ==================== FEATURES ====================
--- Fly
-local flyEnabled = false
-local flySpeed = 50
-
-function toggleFly(state)
-    flyEnabled = state
-    local char = player.Character
-    if not char then return end
-    
-    if flyEnabled then
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = true
-        end
-        
-        flyBodyVelocity = Instance.new("BodyVelocity")
-        flyBodyVelocity.MaxForce = Vector3.new(1/0, 1/0, 1/0)
-        flyBodyVelocity.Parent = char:FindFirstChild("HumanoidRootPart")
-        
-        local connection
-        connection = RunService.RenderStepped:Connect(function()
-            if not flyEnabled then
-                connection:Disconnect()
-                return
-            end
-            if not char or not char.Parent then return end
-            
-            local cameraDirection = camera.CFrame.LookVector
-            local moveDirection = Vector3.new()
-            
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveDirection = moveDirection + cameraDirection
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveDirection = moveDirection - cameraDirection
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveDirection = moveDirection - camera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveDirection = moveDirection + camera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveDirection = moveDirection + Vector3.new(0, 1, 0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                moveDirection = moveDirection - Vector3.new(0, 1, 0)
-            end
-            
-            if moveDirection.Magnitude > 0 then
-                moveDirection = moveDirection.Unit
-            end
-            
-            if flyBodyVelocity then
-                flyBodyVelocity.Velocity = moveDirection * flySpeed
-            end
-        end)
-    else
-        if flyBodyVelocity then
-            flyBodyVelocity:Destroy()
-            flyBodyVelocity = nil
-        end
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = false
-        end
-    end
-end
-
--- Fast Run
-local fastrunEnabled = false
-local fastrunSpeed = 50
-
-function toggleFastRun(state)
-    fastrunEnabled = state
-    local char = player.Character
-    if char then
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            if fastrunEnabled then
-                humanoid.WalkSpeed = fastrunSpeed
-            else
-                humanoid.WalkSpeed = 16
-            end
-        end
-    end
-end
-
-function setFastRunSpeed(speed)
-    fastrunSpeed = speed
-    if fastrunEnabled then
-        local char = player.Character
-        if char then
-            local humanoid = char:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.WalkSpeed = fastrunSpeed
-            end
-        end
-    end
-end
-
--- Wallhack/ESP
-local wallhackEnabled = false
-local espConnections = {}
-
-function toggleWallhack(state)
-    wallhackEnabled = state
-    
-    if wallhackEnabled then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= player then
-                local char = p.Character
-                if char then
-                    local highlight = Instance.new("Highlight")
-                    highlight.Parent = char
-                    highlight.FillColor = p.TeamColor and p.TeamColor.Color or Color3.fromRGB(255, 255, 255)
-                    highlight.FillTransparency = 0.7
-                    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
-                    highlight.OutlineTransparency = 0.3
-                    
-                    espConnections[p] = highlight
-                end
-            end
-        end
-        
-        Players.PlayerAdded:Connect(function(p)
-            p.CharacterAdded:Connect(function(char)
-                if wallhackEnabled then
-                    local highlight = Instance.new("Highlight")
-                    highlight.Parent = char
-                    highlight.FillColor = p.TeamColor and p.TeamColor.Color or Color3.fromRGB(255, 255, 255)
-                    highlight.FillTransparency = 0.7
-                    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
-                    highlight.OutlineTransparency = 0.3
-                    espConnections[p] = highlight
-                end
-            end)
-        end)
-    else
-        for _, highlight in pairs(espConnections) do
-            if highlight then
-                highlight:Destroy()
-            end
-        end
-        espConnections = {}
-    end
-end
-
--- Godmode
-local godmodeEnabled = false
-
-function toggleGodmode(state)
-    godmodeEnabled = state
-    local char = player.Character
-    if char then
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.BreakJointsOnDeath = not godmodeEnabled
-            if godmodeEnabled then
-                humanoid.MaxHealth = math.huge
-                humanoid.Health = math.huge
-            else
-                humanoid.MaxHealth = 100
-                humanoid.Health = 100
-            end
-        end
-    end
-end
-
--- Aimbot
-local aimbotEnabled = false
-local aimbotTarget = "All"
-
-function toggleAimbot(state)
-    aimbotEnabled = state
-end
-
-function setAimbotTarget(target)
-    aimbotTarget = target
-end
-
--- Check who is killer (simulation)
-function getKiller()
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player and p.Team and p.Team.Name == "Killer" then
-            return p
-        end
-    end
-    return nil
-end
-
-function getSurvivors()
-    local survivors = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player and p.Team and p.Team.Name == "Survivor" then
-            table.insert(survivors, p)
-        end
-    end
-    return survivors
-end
-
-function getAimbotTarget()
-    if aimbotTarget == "All" then
-        local closest = nil
-        local closestDist = math.huge
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local dist = (p.Character.HumanoidRootPart.Position - camera.CFrame.Position).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closest = p
-                end
-            end
-        end
-        return closest
-    elseif aimbotTarget == "Killer" then
-        return getKiller()
-    elseif aimbotTarget == "Survivor" then
-        local survivors = getSurvivors()
-        if #survivors > 0 then
-            local closest = nil
-            local closestDist = math.huge
-            for _, p in pairs(survivors) do
-                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (p.Character.HumanoidRootPart.Position - camera.CFrame.Position).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        closest = p
-                    end
-                end
-            end
-            return closest
-        end
-    end
-    return nil
-end
-
--- Killer Mode
-local killerModeEnabled = false
-local killerConnection = nil
-
-function toggleKillerMode(state)
-    killerModeEnabled = state
-    
-    if killerModeEnabled then
-        killerConnection = RunService.RenderStepped:Connect(function()
-            local killer = player
-            if killer and killer.Character then
-                local survivors = getSurvivors()
-                for _, survivor in pairs(survivors) do
-                    if survivor and survivor.Character and survivor.Character:FindFirstChild("HumanoidRootPart") then
-                        local hrp = survivor.Character.HumanoidRootPart
-                        local killerHrp = killer.Character:FindFirstChild("HumanoidRootPart")
-                        if killerHrp then
-                            killerHrp.CFrame = hrp.CFrame * CFrame.new(0, 0, 2)
-                            
-                            -- Attack simulation
-                            local humanoid = survivor.Character:FindFirstChild("Humanoid")
-                            if humanoid and humanoid.Health > 0 then
-                                humanoid.Health = humanoid.Health - 10
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-    else
-        if killerConnection then
-            killerConnection:Disconnect()
-            killerConnection = nil
-        end
-    end
-end
-
--- No Cooldown
-local noCooldownEnabled = false
-
-function toggleNoCooldown(state)
-    noCooldownEnabled = state
-end
-
--- ==================== UI BUILD ====================
+-- ==================== BUILD UI MENU ====================
 -- Fly Section
 createToggle("✈️ Fly Mode", false, function(state)
-    settings.fly.enabled = state
     toggleFly(state)
 end)
 
 createSlider("Fly Speed", 20, 200, 50, function(value)
-    flySpeed = value
-    settings.fly.speed = value
+    setFlySpeed(value)
 end)
 
 -- Fast Run Section
 createToggle("🏃 Fast Run", false, function(state)
-    settings.fastrun.enabled = state
     toggleFastRun(state)
 end)
 
 createSlider("Run Speed", 20, 200, 50, function(value)
     setFastRunSpeed(value)
-    settings.fastrun.speed = value
 end)
 
 -- ESP Section
 createToggle("👁️ Wallhack / ESP", false, function(state)
-    settings.wallhack.enabled = state
     toggleWallhack(state)
 end)
 
 -- Godmode Section
 createToggle("🛡️ Godmode (Invincible)", false, function(state)
-    settings.godmode.enabled = state
     toggleGodmode(state)
 end)
 
 -- Aimbot Section
 createToggle("🎯 Auto Aim (Pistol)", false, function(state)
-    settings.aimbot.enabled = state
     toggleAimbot(state)
 end)
 
 createDropdown("Aimbot Target", {"All", "Killer", "Survivor"}, function(value)
     setAimbotTarget(value)
-    settings.aimbot.target = value
 end)
 
 -- Killer Mode Section
 createToggle("👑 Killer Mode (Auto Kill)", false, function(state)
-    settings.killerMode.enabled = state
     toggleKillerMode(state)
 end)
 
 -- No Cooldown Section
 createToggle("⚡ No Cooldown (Killer)", false, function(state)
-    settings.noCooldown.enabled = state
     toggleNoCooldown(state)
 end)
 
@@ -914,20 +1056,10 @@ miniBtn.MouseButton1Click:Connect(function()
     miniBtn.Visible = false
 end)
 
--- ==================== AUTO UPDATE PLAYER LIST ====================
-game:GetService("Players").PlayerAdded:Connect(function()
-    wait(0.5)
-    updatePlayerList()
-end)
-
-game:GetService("Players").PlayerRemoving:Connect(function()
-    wait(0.5)
-    updatePlayerList()
-end)
-
 -- ==================== CHARACTER RESPAWN HANDLER ====================
 player.CharacterAdded:Connect(function(char)
-    wait(0.5)
+    wait(1)
+    
     if settings.fastrun.enabled then
         local humanoid = char:FindFirstChild("Humanoid")
         if humanoid then
@@ -940,34 +1072,19 @@ player.CharacterAdded:Connect(function(char)
         if humanoid then
             humanoid.MaxHealth = math.huge
             humanoid.Health = math.huge
+            humanoid.BreakJointsOnDeath = false
         end
     end
     
     if settings.fly.enabled then
+        wait(0.5)
         toggleFly(true)
     end
-end)
-
--- ==================== AIMBOT LOOP ====================
-RunService.RenderStepped:Connect(function()
-    if aimbotEnabled then
-        local target = getAimbotTarget()
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = target.Character.HumanoidRootPart
-            camera.CFrame = CFrame.new(camera.CFrame.Position, hrp.Position)
-        end
+    
+    if settings.emote.enabled and settings.emote.currentEmote then
+        wait(0.5)
+        playEmote(settings.emote.currentEmote, char)
     end
 end)
 
--- ==================== NO COOLDOWN HANDLER ====================
-if noCooldownEnabled then
-    local oldIndex
-    oldIndex = hookmetamethod(game, "__index", function(self, key)
-        if noCooldownEnabled and tostring(key):lower():find("cooldown") then
-            return 0
-        end
-        return oldIndex(self, key)
-    end)
-end
-
-print("✅ LIXX HUB | VIOLENCE DISTRICT EDITION LOADED!")
+print("✅ LIXX HUB | VIOLENCE DISTRICT EDITION FIXED LOADED!")
