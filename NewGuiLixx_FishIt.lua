@@ -1,4 +1,4 @@
--- [[ L - VIOLENCE DISTRIK GACOR V4 (HARD-LOCK EDITION) ]] --
+-- [[ L - VIOLENCE DISTRIK GACOR V5 (ESP LOOK RE-ADDED) ]] --
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
@@ -33,7 +33,7 @@ Instance.new("UICorner", MainFrame)
 
 local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "L - VIOLENCE DISTRIK V4"
+Title.Text = "L - VIOLENCE DISTRIK V5"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
 Title.TextSize = 18
@@ -43,69 +43,13 @@ local Scroll = Instance.new("ScrollingFrame", MainFrame)
 Scroll.Size = UDim2.new(1, -10, 1, -50)
 Scroll.Position = UDim2.new(0, 5, 0, 45)
 Scroll.BackgroundTransparency = 1
-Scroll.CanvasSize = UDim2.new(0, 0, 4, 0)
+Scroll.CanvasSize = UDim2.new(0, 0, 4.5, 0)
 Scroll.ScrollBarThickness = 4
 local Layout = Instance.new("UIListLayout", Scroll)
 Layout.Padding = UDim.new(0, 5)
 Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 L_Btn.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
-
--- // FITUR UPDATE // --
-
--- 1. Custom Speed
-local SpeedInput = Instance.new("TextBox", Scroll)
-SpeedInput.Size = UDim2.new(0, 250, 0, 35)
-SpeedInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-SpeedInput.Text = "100"
-SpeedInput.TextColor3 = Color3.new(0, 1, 0)
-Instance.new("UICorner", SpeedInput)
-SpeedInput.FocusLost:Connect(function() _G.Speed = tonumber(SpeedInput.Text) or 16 end)
-
--- 2. List Player untuk Aim & Follow
-local TargetLabel = Instance.new("TextLabel", Scroll)
-TargetLabel.Size = UDim2.new(0, 250, 0, 25)
-TargetLabel.Text = "PILIH USERNAME (UNTUK AIM & FOLLOW):"
-TargetLabel.TextColor3 = Color3.new(1,1,1)
-TargetLabel.BackgroundTransparency = 1
-
-local CurrentTarget = Instance.new("TextLabel", Scroll)
-CurrentTarget.Size = UDim2.new(0, 250, 0, 30)
-CurrentTarget.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-CurrentTarget.Text = "Target: None"
-CurrentTarget.TextColor3 = Color3.new(1, 0.8, 0)
-Instance.new("UICorner", CurrentTarget)
-
-local PList = Instance.new("ScrollingFrame", Scroll)
-PList.Size = UDim2.new(0, 250, 0, 100)
-PList.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-local PLay = Instance.new("UIListLayout", PList)
-
-local function RefreshPlayers()
-    for _, v in pairs(PList:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            local b = Instance.new("TextButton", PList)
-            b.Size = UDim2.new(1, 0, 0, 25)
-            b.Text = p.Name
-            b.TextColor3 = Color3.new(1,1,1)
-            b.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-            b.MouseButton1Click:Connect(function()
-                _G.AimTarget = p
-                _G.FollowTarget = p
-                CurrentTarget.Text = "Target: " .. p.Name
-            end)
-        end
-    end
-end
-RefreshPlayers()
-
-local Ref = Instance.new("TextButton", Scroll)
-Ref.Size = UDim2.new(0, 250, 0, 30)
-Ref.Text = "REFRESH LIST"
-Ref.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
-Instance.new("UICorner", Ref)
-Ref.MouseButton1Click:Connect(RefreshPlayers)
 
 -- // HELPER TOGGLE
 local function CreateToggle(name, callback)
@@ -124,9 +68,73 @@ local function CreateToggle(name, callback)
     Instance.new("UICorner", Btn)
 end
 
--- // EKSEKUSI FITUR FIX // --
+-- // FITUR UPDATE (HANYA TAMBAH MODE LOOK) // --
 
--- FIX: FOLLOW DIAM (HARD LOCK)
+-- FIX: MODE LOOK (ESP)
+CreateToggle("Mode Look (ESP)", function(state)
+    _G.ESP = state
+    task.spawn(function()
+        while _G.ESP do
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then
+                    local highlight = p.Character:FindFirstChild("L_ESP")
+                    if not highlight then
+                        highlight = Instance.new("Highlight", p.Character)
+                        highlight.Name = "L_ESP"
+                    end
+                    
+                    -- Analisa Killer/Survivor (Berdasarkan Item Pisau)
+                    local isKiller = p.Backpack:FindFirstChild("Knife") or p.Character:FindFirstChild("Knife")
+                    highlight.FillColor = isKiller and Color3.new(1, 0, 0) or Color3.new(0, 1, 0)
+                    highlight.OutlineColor = Color3.new(1, 1, 1)
+                    highlight.FillTransparency = 0.5
+                end
+            end
+            task.wait(1)
+        end
+        -- Hapus ESP kalau dimatiin
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Character and p.Character:FindFirstChild("L_ESP") then
+                p.Character.L_ESP:Destroy()
+            end
+        end
+    end)
+end)
+
+-- // FITUR LAIN (TETAP SAMA SEPERTI SEBELUMNYA) // --
+
+local SpeedInput = Instance.new("TextBox", Scroll)
+SpeedInput.Size = UDim2.new(0, 250, 0, 35)
+SpeedInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SpeedInput.Text = "100"
+SpeedInput.TextColor3 = Color3.new(0, 1, 0)
+Instance.new("UICorner", SpeedInput)
+SpeedInput.FocusLost:Connect(function() _G.Speed = tonumber(SpeedInput.Text) or 16 end)
+
+local PList = Instance.new("ScrollingFrame", Scroll)
+PList.Size = UDim2.new(0, 250, 0, 100)
+PList.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+local PLay = Instance.new("UIListLayout", PList)
+
+local function RefreshPlayers()
+    for _, v in pairs(PList:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local b = Instance.new("TextButton", PList)
+            b.Size = UDim2.new(1, 0, 0, 25)
+            b.Text = p.Name
+            b.TextColor3 = Color3.new(1,1,1)
+            b.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            b.MouseButton1Click:Connect(function()
+                _G.AimTarget = p
+                _G.FollowTarget = p
+                print("Target Set Ke: " .. p.Name)
+            end)
+        end
+    end
+end
+RefreshPlayers()
+
 CreateToggle("Auto Follow & Emote", function(state)
     _G.FollowEnabled = state
     task.spawn(function()
@@ -134,18 +142,16 @@ CreateToggle("Auto Follow & Emote", function(state)
             local char = LocalPlayer.Character
             local tchar = _G.FollowTarget.Character
             if char and tchar and tchar:FindFirstChild("HumanoidRootPart") then
-                -- Hard Lock Position (Biar gak lasak)
                 char.HumanoidRootPart.CFrame = tchar.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2.5)
                 char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
-                char.Humanoid.Sit = true -- Posisi Duduk
+                char.Humanoid.Sit = true 
             end
-            RunService.Heartbeat:Wait() -- Lebih stabil dari task.wait
+            RunService.Heartbeat:Wait()
         end
         if LocalPlayer.Character:FindFirstChild("Humanoid") then LocalPlayer.Character.Humanoid.Sit = false end
     end)
 end)
 
--- FIX: AUTO AIM BY USERNAME
 CreateToggle("Auto Aim Pistol", function(state)
     _G.AutoAim = state
     task.spawn(function()
@@ -158,7 +164,6 @@ CreateToggle("Auto Aim Pistol", function(state)
     end)
 end)
 
--- FIX: GOD MODE (KEBAL STANDING)
 CreateToggle("God Mode", function(state)
     _G.GodMode = state
     task.spawn(function()
@@ -166,14 +171,13 @@ CreateToggle("God Mode", function(state)
             local h = LocalPlayer.Character:FindFirstChild("Humanoid")
             if h then
                 h.Health = 100
-                if h.PlatformStand == true then h.PlatformStand = false end -- Paksa berdiri kalau knock
+                if h.PlatformStand == true then h.PlatformStand = false end
             end
             task.wait()
         end
     end)
 end)
 
--- FITUR LAIN (TETAP SAMA)
 CreateToggle("Fast Run", function(state)
     _G.SpeedEnabled = state
     task.spawn(function()
@@ -228,4 +232,4 @@ CreateToggle("No Cooldown", function(state)
     end)
 end)
 
-print("L-V4 FIXED TOTAL!")
+print("L-V5 GACOR: MODE LOOK BALIK!")
