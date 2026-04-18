@@ -1,8 +1,8 @@
 --[[
-    DELTA EXECUTOR - VIOLENCE DISTRICT HUB
-    Fitur lengkap: Fly, FastRun, Emote + Auto Chase, Wallhack, AutoAim, Kebal, Mode Killer God, No Cooldown
-    UI dengan huruf L & tombol ❎, persistent antar match
-    by Dyvillexz/Codex 👾🔥
+    DELTA EXECUTOR - VIOLENCE DISTRICT HUB [FIXED FULL VERSION]
+    Fitur: Fly, FastRun, Emote + Auto Follow + List Player, Wallhack, Auto Aim (Kamera & Tembak), 
+    Kebal (True God Mode), Auto Kill Mode Killer (Teleport + Attack Loop)
+    by Dyvillexz/Codex 🔥👾
 ]]
 
 local player = game.Players.LocalPlayer
@@ -10,53 +10,69 @@ local char = player.Character or player.CharacterAdded:wait()
 local hrp = char:WaitForChild("HumanoidRootPart")
 local hum = char:WaitForChild("Humanoid")
 local camera = workspace.CurrentCamera
+local userInput = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
+local tweenservice = game:GetService("TweenService")
+local players = game:GetService("Players")
+local virtualUser = game:GetService("VirtualUser")
+local replicatedStorage = game:GetService("ReplicatedStorage")
 
--- Variables
+-- VARIABLES
 local flyEnabled = false
-local flyBodyVel = nil
-local flyGyro = nil
-local runSpeed = 16
+local flyBV = nil
+local flyBG = nil
 local runEnabled = false
+local runSpeed = 45
 local originalSpeed = 16
 local espEnabled = false
-local espLines = {}
+local espObjects = {}
 local autoAimEnabled = false
-local autoAimTarget = "All" -- "Survivor" / "Killer" / "All"
+local autoAimTarget = "Killer"
 local godModeEnabled = false
 local killerModeEnabled = false
 local noCooldownEnabled = false
 local emoteEnabled = false
 local currentEmote = "nyoli"
-local chaseTarget = nil
-local chaseConnection = nil
-local killerAttackTask = nil
+local followTarget = nil
+local followConnection = nil
+local followEnabled = false
+local killLoopConnection = nil
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
-
--- Fungsi untuk nentuin role (Killer/Survivor) di Violence District
+-- Fungsi deteksi role (sesuai game Violence District)
 local function getPlayerRole(plr)
-    -- Biasanya role ada di leaderstats atau atribut
-    local leaderstats = plr:FindFirstChild("leaderstats")
-    if leaderstats then
-        local role = leaderstats:FindFirstChild("Role")
-        if role then return role.Value end
+    -- Coba dari leaderstats
+    local ls = plr:FindFirstChild("leaderstats")
+    if ls then
+        local role = ls:FindFirstChild("Role") or ls:FindFirstChild("Team")
+        if role then
+            local roleVal = tostring(role.Value)
+            if roleVal:lower():find("killer") or roleVal:lower():find("murderer") then
+                return "Killer"
+            else
+                return "Survivor"
+            end
+        end
     end
+    -- Coba dari character tags
     local character = plr.Character
-    if character and character:FindFirstChild("KillerTag") then return "Killer" end
-    if character and character:FindFirstChild("SurvivorTag") then return "Survivor" end
-    -- Fallback detect dari tool atau warna
-    return "Survivor" -- default
+    if character then
+        if character:FindFirstChild("KillerTag") or character:FindFirstChild("IsKiller") then
+            return "Killer"
+        end
+    end
+    -- Coba dari warna nama atau tool
+    for _, tool in pairs(plr.Backpack:GetChildren()) do
+        if tool.Name:lower():find("knife") or tool.Name:lower():find("sword") or tool.Name:lower():find("kill") then
+            return "Killer"
+        end
+    end
+    return "Survivor"
 end
 
--- Fungsi buat dapetin semua player di server
+-- Dapetin semua player
 local function getAllPlayers()
     local list = {}
-    for _, plr in pairs(Players:GetPlayers()) do
+    for _, plr in pairs(players:GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             table.insert(list, plr)
         end
@@ -64,59 +80,52 @@ local function getAllPlayers()
     return list
 end
 
--- ========== FITUR 1: FLY ==========
+-- ========== FLY FIX ==========
 local function startFly()
-    if flyBodyVel then flyBodyVel:Destroy() end
-    if flyGyro then flyGyro:Destroy() end
-    flyBodyVel = Instance.new("BodyVelocity")
-    flyBodyVel.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    flyBodyVel.Velocity = Vector3.new(0, 0, 0)
-    flyGyro = Instance.new("BodyGyro")
-    flyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    flyGyro.CFrame = hrp.CFrame
-    flyBodyVel.Parent = hrp
-    flyGyro.Parent = hrp
+    if flyBV then flyBV:Destroy() end
+    if flyBG then flyBG:Destroy() end
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    flyBV.Velocity = Vector3.new(0, 0, 0)
+    flyBG = Instance.new("BodyGyro")
+    flyBG.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    flyBG.CFrame = hrp.CFrame
+    flyBV.Parent = hrp
+    flyBG.Parent = hrp
     
-    local moveDirection = Vector3.new(0, 0, 0)
-    local speed = 50
+    local moveVec = Vector3.new(0, 0, 0)
+    local flySpeed = 70
     
-    local userInputConnections = {}
-    userInputConnections.MoveForward = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.W then moveDirection = moveDirection + Vector3.new(0, 0, -1) end
-        if input.KeyCode == Enum.KeyCode.S then moveDirection = moveDirection + Vector3.new(0, 0, 1) end
-        if input.KeyCode == Enum.KeyCode.A then moveDirection = moveDirection + Vector3.new(-1, 0, 0) end
-        if input.KeyCode == Enum.KeyCode.D then moveDirection = moveDirection + Vector3.new(1, 0, 0) end
-        if input.KeyCode == Enum.KeyCode.Space then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
-        if input.KeyCode == Enum.KeyCode.LeftControl then moveDirection = moveDirection + Vector3.new(0, -1, 0) end
+    local inputBegan = userInput.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.W then moveVec = moveVec + Vector3.new(0, 0, -1) end
+        if input.KeyCode == Enum.KeyCode.S then moveVec = moveVec + Vector3.new(0, 0, 1) end
+        if input.KeyCode == Enum.KeyCode.A then moveVec = moveVec + Vector3.new(-1, 0, 0) end
+        if input.KeyCode == Enum.KeyCode.D then moveVec = moveVec + Vector3.new(1, 0, 0) end
+        if input.KeyCode == Enum.KeyCode.Space then moveVec = moveVec + Vector3.new(0, 1, 0) end
+        if input.KeyCode == Enum.KeyCode.LeftControl then moveVec = moveVec + Vector3.new(0, -1, 0) end
     end)
     
-    userInputConnections.MoveEnded = UserInputService.InputEnded:Connect(function(input)
-        if input.KeyCode == Enum.KeyCode.W then moveDirection = moveDirection - Vector3.new(0, 0, -1) end
-        if input.KeyCode == Enum.KeyCode.S then moveDirection = moveDirection - Vector3.new(0, 0, 1) end
-        if input.KeyCode == Enum.KeyCode.A then moveDirection = moveDirection - Vector3.new(-1, 0, 0) end
-        if input.KeyCode == Enum.KeyCode.D then moveDirection = moveDirection - Vector3.new(1, 0, 0) end
-        if input.KeyCode == Enum.KeyCode.Space then moveDirection = moveDirection - Vector3.new(0, 1, 0) end
-        if input.KeyCode == Enum.KeyCode.LeftControl then moveDirection = moveDirection - Vector3.new(0, -1, 0) end
+    local inputEnded = userInput.InputEnded:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.W then moveVec = moveVec - Vector3.new(0, 0, -1) end
+        if input.KeyCode == Enum.KeyCode.S then moveVec = moveVec - Vector3.new(0, 0, 1) end
+        if input.KeyCode == Enum.KeyCode.A then moveVec = moveVec - Vector3.new(-1, 0, 0) end
+        if input.KeyCode == Enum.KeyCode.D then moveVec = moveVec - Vector3.new(1, 0, 0) end
+        if input.KeyCode == Enum.KeyCode.Space then moveVec = moveVec - Vector3.new(0, 1, 0) end
+        if input.KeyCode == Enum.KeyCode.LeftControl then moveVec = moveVec - Vector3.new(0, -1, 0) end
     end)
     
-    RunService.RenderStepped:Connect(function()
+    runService.RenderStepped:Connect(function()
         if not flyEnabled then return end
-        if moveDirection.Magnitude > 0 then
-            moveDirection = moveDirection.Unit
-        end
+        if moveVec.Magnitude > 0 then moveVec = moveVec.Unit end
         local camCF = camera.CFrame
-        local forward = camCF.LookVector
-        local right = camCF.RightVector
-        local up = camCF.UpVector
-        local velocity = (forward * moveDirection.Z + right * moveDirection.X + up * moveDirection.Y) * speed
-        flyBodyVel.Velocity = velocity
-        flyGyro.CFrame = camCF
+        local vel = (camCF.LookVector * moveVec.Z + camCF.RightVector * moveVec.X + camCF.UpVector * moveVec.Y) * flySpeed
+        flyBV.Velocity = vel
+        flyBG.CFrame = camCF
     end)
 end
 
--- ========== FITUR 2: FAST RUN ==========
-local function setRunSpeed()
+-- ========== FAST RUN ==========
+local function updateRunSpeed()
     if runEnabled then
         hum.WalkSpeed = runSpeed
     else
@@ -124,434 +133,569 @@ local function setRunSpeed()
     end
 end
 
--- ========== FITUR 3: EMOTE + AUTO CHASE ==========
-local function playEmote(emoteName)
-    -- Animasi emote (simulasi pake tween)
-    local animTrack = nil
-    if emoteName == "nyoli" then
-        -- Gerakan ngocok pake satu tangan
-        local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true)
-        local goal = {CFrame = hrp.CFrame * CFrame.new(0, 0, 0) * CFrame.Angles(0, 0, math.rad(30))}
-        TweenService:Create(hrp, tweenInfo, goal):Play()
-    elseif emoteName == "lelah" then
-        -- Terbaring di tanah
-        hum.Sit = true
-        wait(0.1)
-        hrp.CFrame = hrp.CFrame * CFrame.new(0, -3, 0)
-    elseif emoteName == "duduk" then
-        hum.Sit = true
+-- ========== WALLHACK / ESP FIX ==========
+local function updateESP()
+    for _, obj in pairs(espObjects) do
+        if obj and obj.Parent then obj:Destroy() end
     end
-end
-
-local function startChase(targetPlayer)
-    if chaseConnection then chaseConnection:Disconnect() end
-    chaseConnection = RunService.RenderStepped:Connect(function()
-        if not emoteEnabled or not chaseTarget or not chaseTarget.Character or not chaseTarget.Character:FindFirstChild("HumanoidRootPart") then
-            return
-        end
-        local targetPos = chaseTarget.Character.HumanoidRootPart.Position
-        hrp.CFrame = CFrame.new(hrp.Position, targetPos)
-        local distance = (targetPos - hrp.Position).Magnitude
-        if distance > 5 then
-            hrp.CFrame = CFrame.new(hrp.Position + (targetPos - hrp.Position).Unit * 4, targetPos)
-        end
-        playEmote(currentEmote)
-    end)
-end
-
--- ========== FITUR 4: WALLHACK / MODE LOOK ==========
-local function createESP()
-    for _, plr in pairs(Players:GetPlayers()) do
+    espObjects = {}
+    
+    if not espEnabled then return end
+    
+    for _, plr in pairs(players:GetPlayers()) do
         if plr ~= player and plr.Character then
+            local role = getPlayerRole(plr)
             local highlight = Instance.new("Highlight")
             highlight.Parent = plr.Character
-            highlight.FillTransparency = 0.7
-            highlight.OutlineTransparency = 0
-            highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
-            local role = getPlayerRole(plr)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineTransparency = 0.2
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             if role == "Killer" then
                 highlight.FillColor = Color3.fromRGB(255, 0, 0)
-                highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 50, 50)
             else
                 highlight.FillColor = Color3.fromRGB(0, 255, 0)
-                highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
+                highlight.OutlineColor = Color3.fromRGB(50, 255, 50)
             end
-            table.insert(espLines, highlight)
+            table.insert(espObjects, highlight)
+            
+            -- Tambah billboard biar makin jelas
+            local bill = Instance.new("BillboardGui")
+            bill.Size = UDim2.new(0, 100, 0, 30)
+            bill.Adornee = plr.Character:FindFirstChild("Head") or plr.Character:FindFirstChild("HumanoidRootPart")
+            bill.Parent = plr.Character
+            local text = Instance.new("TextLabel", bill)
+            text.Size = UDim2.new(1, 0, 1, 0)
+            text.BackgroundTransparency = 1
+            text.TextColor3 = role == "Killer" and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+            text.Text = plr.Name .. " (" .. role .. ")"
+            text.TextStrokeTransparency = 0
+            text.TextScaled = true
+            table.insert(espObjects, bill)
         end
     end
 end
 
-local function clearESP()
-    for _, esp in pairs(espLines) do
-        if esp and esp.Parent then esp:Destroy() end
-    end
-    espLines = {}
-end
-
--- ========== FITUR 5: AUTO AIM PISTOL ==========
-local function autoAim()
-    local tool = player.Character and player.Character:FindFirstChildWhichIsA("Tool")
-    if not tool or not tool:FindFirstChild("Handle") then return end
-    local closestTarget = nil
-    local closestDist = math.huge
-    for _, plr in pairs(Players:GetPlayers()) do
+-- ========== AUTO AIM PISTOL (FIX: KAMERA & TEMBAK) ==========
+local function autoAimShoot()
+    if not autoAimEnabled then return end
+    
+    -- Cari target berdasarkan pilihan
+    local bestTarget = nil
+    local bestDist = math.huge
+    
+    for _, plr in pairs(players:GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local role = getPlayerRole(plr)
-            if autoAimTarget == "All" or (autoAimTarget == "Survivor" and role == "Survivor") or (autoAimTarget == "Killer" and role == "Killer") then
-                local pos = plr.Character.HumanoidRootPart.Position
-                local dist = (pos - camera.CFrame.Position).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closestTarget = plr.Character.HumanoidRootPart
+            local shouldTarget = false
+            if autoAimTarget == "All" then
+                shouldTarget = true
+            elseif autoAimTarget == "Killer" and role == "Killer" then
+                shouldTarget = true
+            elseif autoAimTarget == "Survivor" and role == "Survivor" then
+                shouldTarget = true
+            end
+            
+            if shouldTarget then
+                local targetPos = plr.Character.HumanoidRootPart.Position
+                local dist = (targetPos - hrp.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    bestTarget = plr.Character.HumanoidRootPart
                 end
             end
         end
     end
-    if closestTarget then
-        camera.CFrame = CFrame.new(camera.CFrame.Position, closestTarget.Position)
-        -- Simulasi tembak
-        tool:Activate()
+    
+    if bestTarget then
+        -- Arahkan kamera ke target
+        camera.CFrame = CFrame.new(camera.CFrame.Position, bestTarget.Position)
+        
+        -- Cari pistol di tangan atau backpack
+        local tool = char:FindFirstChildWhichIsA("Tool")
+        if not tool then
+            for _, t in pairs(player.Backpack:GetChildren()) do
+                if t:IsA("Tool") and (t.Name:lower():find("pistol") or t.Name:lower():find("gun") or t.Name:lower():find("revolver")) then
+                    tool = t
+                    break
+                end
+            end
+        end
+        
+        if tool then
+            -- Equip kalo belum
+            if tool.Parent ~= char then
+                tool.Parent = char
+                wait(0.1)
+            end
+            -- Tembak!
+            tool:Activate()
+            -- Simulasi klik mouse
+            virtualUser:ClickButton1(Vector2.new(0, 0))
+        end
     end
 end
 
--- ========== FITUR 6: KEBAL ==========
-local function setGodMode()
+-- ========== KEBAL MODE (TRUE GOD MODE) ==========
+local function enableGodMode()
     if godModeEnabled then
-        hum.MaxHealth = math.huge
-        hum.Health = math.huge
+        -- Bikin character gabisa mati
+        hum.MaxHealth = 9e9
+        hum.Health = 9e9
         hum.BreakJointsOnDeath = false
-        char:FindFirstChild("Humanoid").BreakJointsOnDeath = false
+        hum:GetPropertyChangedSignal("Health"):Connect(function()
+            if godModeEnabled and hum.Health <= 0 then
+                hum.Health = 9e9
+            end
+        end)
+        -- Cegah stun/ragdoll
+        hum.Sit = false
+        -- Proteksi dari kill parts
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part:SetNetworkOwner(nil)
+            end
+        end
     else
         hum.MaxHealth = 100
         hum.BreakJointsOnDeath = true
     end
 end
 
--- ========== FITUR 7: MODE KILLER (TELEPORT + AUTO SERANG) ==========
-local function startKillerMode()
-    if killerAttackTask then killerAttackTask:Disconnect() end
-    killerAttackTask = RunService.RenderStepped:Connect(function()
-        if not killerModeEnabled then return end
-        local survivors = {}
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= player and getPlayerRole(plr) == "Survivor" and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                table.insert(survivors, plr)
+-- ========== AUTO FOLLOW + LIST PLAYER ==========
+local function createPlayerList()
+    local listFrame = Instance.new("Frame")
+    listFrame.Name = "PlayerList"
+    listFrame.Size = UDim2.new(0, 200, 0, 300)
+    listFrame.Position = UDim2.new(1, -210, 0, 50)
+    listFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    listFrame.BackgroundTransparency = 0.2
+    listFrame.BorderSizePixel = 0
+    listFrame.Parent = screenGui
+    Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 10)
+    
+    local title = Instance.new("TextLabel", listFrame)
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.Text = "📋 PLAYER LIST"
+    title.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    
+    local scroll = Instance.new("ScrollingFrame", listFrame)
+    scroll.Size = UDim2.new(1, 0, 1, -30)
+    scroll.Position = UDim2.new(0, 0, 0, 30)
+    scroll.BackgroundTransparency = 1
+    
+    local layout = Instance.new("UIListLayout", scroll)
+    layout.Padding = UDim.new(0, 5)
+    
+    local function refreshList()
+        for _, child in pairs(scroll:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+        for _, plr in pairs(players:GetPlayers()) do
+            if plr ~= player then
+                local btn = Instance.new("TextButton", scroll)
+                btn.Size = UDim2.new(1, -10, 0, 35)
+                btn.Text = plr.Name .. " [" .. getPlayerRole(plr) .. "]"
+                btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+                btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                btn.Font = Enum.Font.Gotham
+                Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+                
+                btn.MouseButton1Click:Connect(function()
+                    followTarget = plr
+                    if followEnabled then
+                        startFollowing()
+                    end
+                    -- Notif
+                    local notif = Instance.new("TextLabel", screenGui)
+                    notif.Text = "🎯 Now following: " .. plr.Name
+                    notif.Size = UDim2.new(0, 250, 0, 30)
+                    notif.Position = UDim2.new(0.5, -125, 0, 80)
+                    notif.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                    notif.TextColor3 = Color3.fromRGB(0, 255, 0)
+                    wait(2)
+                    notif:Destroy()
+                end)
             end
         end
-        for _, target in pairs(survivors) do
-            if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                hrp.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-                wait(0.1)
-                -- Serang pake tool killer
-                local killerTool = player.Character:FindFirstChildWhichIsA("Tool")
-                if killerTool then killerTool:Activate() end
-                wait(0.3)
+    end
+    
+    refreshList()
+    players.PlayerAdded:Connect(refreshList)
+    players.PlayerRemoving:Connect(refreshList)
+    
+    return listFrame
+end
+
+local function startFollowing()
+    if followConnection then followConnection:Disconnect() end
+    if not followTarget or not followTarget.Character then return end
+    
+    followConnection = runService.RenderStepped:Connect(function()
+        if not followEnabled or not followTarget or not followTarget.Character then return end
+        local targetHrp = followTarget.Character:FindFirstChild("HumanoidRootPart")
+        if targetHrp then
+            -- Teleport/lerakin ke target
+            local distance = (targetHrp.Position - hrp.Position).Magnitude
+            if distance > 5 then
+                hrp.CFrame = hrp.CFrame + (targetHrp.Position - hrp.Position).Unit * 3
+            end
+            -- Hadapin target
+            hrp.CFrame = CFrame.new(hrp.Position, targetHrp.Position)
+            
+            -- Play emote kalo enabled
+            if emoteEnabled then
+                if currentEmote == "nyoli" then
+                    -- Gerakan ngocok
+                    hrp.CFrame = hrp.CFrame * CFrame.Angles(0, 0, math.sin(tick() * 15) * 0.3)
+                elseif currentEmote == "lelah" then
+                    hum.Sit = true
+                elseif currentEmote == "duduk" then
+                    hum.Sit = true
+                end
             end
         end
     end)
 end
 
--- ========== FITUR 8: NO COOLDOWN ==========
-local function setNoCooldown()
-    if noCooldownEnabled then
-        -- Loop untuk reset cooldown skill
-        spawn(function()
-            while noCooldownEnabled do
-                for _, v in pairs(player.Character:GetChildren()) do
-                    if v:IsA("Tool") and v:FindFirstChild("Cooldown") then
-                        v.Cooldown.Value = 0
+-- ========== MODE KILLER AUTO KILL (FIX) ==========
+local function startKillerAutoKill()
+    if killLoopConnection then killLoopConnection:Disconnect() end
+    
+    killLoopConnection = runService.RenderStepped:Connect(function()
+        if not killerModeEnabled then return end
+        
+        -- Cari semua survivor
+        local survivors = {}
+        for _, plr in pairs(players:GetPlayers()) do
+            if plr ~= player and getPlayerRole(plr) == "Survivor" and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                table.insert(survivors, plr)
+            end
+        end
+        
+        for _, target in pairs(survivors) do
+            if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                -- Teleport ke target
+                local targetPos = target.Character.HumanoidRootPart.Position
+                hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 2, 3), targetPos)
+                wait(0.05)
+                
+                -- Cari weapon killer
+                local weapon = nil
+                for _, tool in pairs(char:GetChildren()) do
+                    if tool:IsA("Tool") then
+                        weapon = tool
+                        break
                     end
                 end
-                wait(0.1)
+                if not weapon then
+                    for _, tool in pairs(player.Backpack:GetChildren()) do
+                        if tool:IsA("Tool") then
+                            weapon = tool
+                            weapon.Parent = char
+                            wait(0.1)
+                            break
+                        end
+                    end
+                end
+                
+                if weapon then
+                    weapon:Activate()
+                    wait(0.1)
+                    -- Serang 2-3 kali biat pasti mati
+                    weapon:Activate()
+                    wait(0.1)
+                    weapon:Activate()
+                end
+                wait(0.2)
             end
-        end)
-    end
+        end
+    end)
 end
 
--- ========== UI KECE DENGAN HURUF L & TOMBOL ❎ ==========
+-- ========== NO COOLDOWN ==========
+local function enableNoCooldown()
+    spawn(function()
+        while noCooldownEnabled do
+            for _, v in pairs(char:GetChildren()) do
+                if v:IsA("Tool") then
+                    for _, prop in pairs(v:GetChildren()) do
+                        if prop.Name:lower():find("cooldown") or prop.Name:lower():find("cd") then
+                            if prop:IsA("NumberValue") then prop.Value = 0 end
+                            if prop:IsA("BoolValue") then prop.Value = false end
+                        end
+                    end
+                end
+            end
+            wait(0.05)
+        end
+    end)
+end
+
+-- ========== UI KECE DENGAN HURUF L ==========
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "DeltaViolenceHub"
-screenGui.ResetOnSpawn = false -- PENTING: UI TIDAK ILANG SAAT MATCH SELANJUTNYA
+screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
+-- Main Frame
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 350, 0, 500)
-mainFrame.Position = UDim2.new(0.5, -175, 0.5, -250)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
-mainFrame.BackgroundTransparency = 0.1
+mainFrame.Size = UDim2.new(0, 380, 0, 550)
+mainFrame.Position = UDim2.new(0.5, -190, 0.5, -275)
+mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
+mainFrame.BackgroundTransparency = 0.15
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 15)
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 20)
+local stroke = Instance.new("UIStroke", mainFrame)
+stroke.Color = Color3.fromRGB(0, 200, 255)
+stroke.Thickness = 1.5
 
--- Huruf L (tombol toggle UI)
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 50, 0, 50)
-toggleButton.Position = UDim2.new(0, 10, 1, -60)
-toggleButton.Text = "L"
-toggleButton.TextColor3 = Color3.fromRGB(0, 255, 255)
-toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-toggleButton.BackgroundTransparency = 0.5
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.TextSize = 30
-toggleButton.Parent = screenGui
-Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(1, 0)
+-- Title
+local title = Instance.new("TextLabel", mainFrame)
+title.Size = UDim2.new(1, 0, 0, 45)
+title.Text = "💀 DELTA EXECUTOR | VIOLENCE DISTRICT 💀"
+title.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+title.TextColor3 = Color3.fromRGB(0, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 20)
 
--- Tombol ❎ (close UI)
-local closeBtn = Instance.new("TextButton")
+-- Close button ❎
+local closeBtn = Instance.new("TextButton", mainFrame)
 closeBtn.Size = UDim2.new(0, 40, 0, 40)
-closeBtn.Position = UDim2.new(1, -50, 0, 10)
+closeBtn.Position = UDim2.new(1, -45, 0, 5)
 closeBtn.Text = "❎"
 closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
 closeBtn.BackgroundTransparency = 1
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 25
-closeBtn.Parent = mainFrame
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
 
--- Scrolling frame untuk menu
-local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 1, -50)
-scroll.Position = UDim2.new(0, 10, 0, 45)
+-- Scrolling Frame
+local scroll = Instance.new("ScrollingFrame", mainFrame)
+scroll.Size = UDim2.new(1, -20, 1, -55)
+scroll.Position = UDim2.new(0, 10, 0, 50)
 scroll.BackgroundTransparency = 1
-scroll.Parent = mainFrame
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+local scrollLayout = Instance.new("UIListLayout", scroll)
+scrollLayout.Padding = UDim.new(0, 8)
 
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 10)
-layout.Parent = scroll
-
--- Fungsi bikin toggle
-local function makeToggle(text, flagVar, callback)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 0, 40)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-    frame.BackgroundTransparency = 0.5
-    frame.Parent = scroll
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+-- Helper bikin toggle
+local function addToggle(text, flagVar, onChange)
+    local frame = Instance.new("Frame", scroll)
+    frame.Size = UDim2.new(1, 0, 0, 45)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
+    frame.BackgroundTransparency = 0.3
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
     
-    local label = Instance.new("TextLabel")
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(0.6, 0, 1, 0)
     label.Text = text
-    label.Size = UDim2.new(0.7, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = frame
+    label.Font = Enum.Font.Gotham
     
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 60, 0, 30)
-    btn.Position = UDim2.new(1, -70, 0.5, -15)
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(0, 70, 0, 35)
+    btn.Position = UDim2.new(1, -80, 0.5, -17.5)
     btn.Text = "OFF"
-    btn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    btn.Parent = frame
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+    btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     
     btn.MouseButton1Click:Connect(function()
         _G[flagVar] = not _G[flagVar]
         btn.Text = _G[flagVar] and "ON" or "OFF"
-        btn.BackgroundColor3 = _G[flagVar] and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
-        callback(_G[flagVar])
+        btn.BackgroundColor3 = _G[flagVar] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+        if onChange then onChange(_G[flagVar]) end
     end)
 end
 
--- Slider untuk fast run speed
-local function makeSlider(text, minVal, maxVal, varName, callback)
-    local frame = Instance.new("Frame")
+-- Slider
+local function addSlider(text, minVal, maxVal, varName, onChange)
+    local frame = Instance.new("Frame", scroll)
     frame.Size = UDim2.new(1, 0, 0, 70)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-    frame.BackgroundTransparency = 0.5
-    frame.Parent = scroll
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
     
-    local label = Instance.new("TextLabel")
-    label.Text = text
-    label.Size = UDim2.new(1, 0, 0, 20)
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(1, 0, 0, 25)
+    label.Text = text .. ": " .. tostring(_G[varName] or minVal)
     label.BackgroundTransparency = 1
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Parent = frame
     
-    local slider = Instance.new("TextButton")
-    slider.Size = UDim2.new(0.8, 0, 0, 30)
-    slider.Position = UDim2.new(0.1, 0, 0.5, 0)
-    slider.Text = tostring(_G[varName] or minVal)
-    slider.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
-    slider.Parent = frame
-    Instance.new("UICorner", slider).CornerRadius = UDim.new(1, 0)
+    local sliderBtn = Instance.new("TextButton", frame)
+    sliderBtn.Size = UDim2.new(0.8, 0, 0, 30)
+    sliderBtn.Position = UDim2.new(0.1, 0, 0.45, 0)
+    sliderBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+    sliderBtn.Text = tostring(_G[varName] or minVal)
+    Instance.new("UICorner", sliderBtn).CornerRadius = UDim.new(1, 0)
     
     local dragging = false
-    slider.MouseButton1Down:Connect(function()
-        dragging = true
+    sliderBtn.MouseButton1Down:Connect(function() dragging = true end)
+    userInput.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
     end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    RunService.RenderStepped:Connect(function()
+    
+    runService.RenderStepped:Connect(function()
         if dragging then
-            local mousePos = UserInputService:GetMouseLocation()
-            local absPos = slider.AbsolutePosition
-            local percent = (mousePos.X - absPos.X) / slider.AbsoluteSize.X
+            local mousePos = userInput:GetMouseLocation()
+            local absPos = sliderBtn.AbsolutePosition
+            local percent = (mousePos.X - absPos.X) / sliderBtn.AbsoluteSize.X
             percent = math.clamp(percent, 0, 1)
             local val = math.floor(minVal + (maxVal - minVal) * percent)
             _G[varName] = val
-            slider.Text = tostring(val)
-            callback(val)
+            sliderBtn.Text = tostring(val)
+            label.Text = text .. ": " .. tostring(val)
+            if onChange then onChange(val) end
         end
     end)
 end
 
--- Dropdown untuk auto aim target
-local function makeDropdown(text, options, varName)
-    local frame = Instance.new("Frame")
+-- Dropdown
+local function addDropdown(text, options, varName)
+    local frame = Instance.new("Frame", scroll)
     frame.Size = UDim2.new(1, 0, 0, 50)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-    frame.BackgroundTransparency = 0.5
-    frame.Parent = scroll
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
     
-    local label = Instance.new("TextLabel")
-    label.Text = text
+    local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(0.5, 0, 1, 0)
+    label.Text = text
     label.BackgroundTransparency = 1
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Parent = frame
     
-    local dropdown = Instance.new("TextButton")
-    dropdown.Size = UDim2.new(0.4, 0, 0.6, 0)
-    dropdown.Position = UDim2.new(0.55, 0, 0.2, 0)
-    dropdown.Text = _G[varName] or options[1]
-    dropdown.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
-    dropdown.Parent = frame
-    Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0, 5)
+    local dropBtn = Instance.new("TextButton", frame)
+    dropBtn.Size = UDim2.new(0.4, 0, 0.6, 0)
+    dropBtn.Position = UDim2.new(0.55, 0, 0.2, 0)
+    dropBtn.Text = _G[varName] or options[1]
+    dropBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+    Instance.new("UICorner", dropBtn).CornerRadius = UDim.new(0, 5)
     
-    local isOpen = false
+    local open = false
     local listFrame = nil
-    dropdown.MouseButton1Click:Connect(function()
+    dropBtn.MouseButton1Click:Connect(function()
         if listFrame then listFrame:Destroy() end
-        isOpen = true
-        listFrame = Instance.new("Frame")
-        listFrame.Size = UDim2.new(0.4, 0, 0, #options * 30)
+        listFrame = Instance.new("Frame", frame)
+        listFrame.Size = UDim2.new(0.4, 0, 0, #options * 35)
         listFrame.Position = UDim2.new(0.55, 0, 0.8, 0)
         listFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-        listFrame.Parent = frame
         Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 5)
         
-        local listLayout = Instance.new("UIListLayout", listFrame)
-        for _, opt in pairs(options) do
-            local optBtn = Instance.new("TextButton")
-            optBtn.Size = UDim2.new(1, 0, 0, 30)
+        for i, opt in pairs(options) do
+            local optBtn = Instance.new("TextButton", listFrame)
+            optBtn.Size = UDim2.new(1, 0, 0, 35)
             optBtn.Text = opt
             optBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-            optBtn.Parent = listFrame
             optBtn.MouseButton1Click:Connect(function()
                 _G[varName] = opt
-                dropdown.Text = opt
+                dropBtn.Text = opt
                 listFrame:Destroy()
-                isOpen = false
             end)
         end
     end)
 end
 
--- Daftar menu UI
-makeToggle("✈️ Fly (WASD + Space/Ctrl)", "flyEnabled", function(val)
+-- Build UI
+addToggle("✈️ FLY MODE (WASD + Space/Ctrl)", "flyEnabled", function(val)
     flyEnabled = val
-    if val then startFly() else if flyBodyVel then flyBodyVel:Destroy() end end
+    if val then startFly() end
 end)
 
-makeToggle("🏃 Fast Run", "runEnabled", function(val)
+addToggle("🏃 FAST RUN", "runEnabled", function(val)
     runEnabled = val
-    setRunSpeed()
+    updateRunSpeed()
 end)
-makeSlider("⚡ Fast Run Speed", 16, 200, "runSpeed", function(val)
+addSlider("⚡ RUN SPEED", 16, 250, "runSpeed", function(val)
     runSpeed = val
     if runEnabled then hum.WalkSpeed = runSpeed end
 end)
 
-makeToggle("😈 Emote + Auto Chase", "emoteEnabled", function(val)
-    emoteEnabled = val
-    if not val and chaseConnection then chaseConnection:Disconnect() end
-end)
-
--- Dropdown emote
-local emoteFrame = Instance.new("Frame")
-emoteFrame.Size = UDim2.new(1, 0, 0, 40)
-emoteFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-emoteFrame.BackgroundTransparency = 0.5
-emoteFrame.Parent = scroll
-Instance.new("UICorner", emoteFrame).CornerRadius = UDim.new(0, 8)
-local emoteLabel = Instance.new("TextLabel", emoteFrame)
-emoteLabel.Text = "🎭 Pilih Emote:"
-emoteLabel.Size = UDim2.new(0.4, 0, 1, 0)
-emoteLabel.BackgroundTransparency = 1
-emoteLabel.TextColor3 = Color3.fromRGB(255,255,255)
-local emoteDropdown = Instance.new("TextButton", emoteFrame)
-emoteDropdown.Size = UDim2.new(0.4, 0, 0.6, 0)
-emoteDropdown.Position = UDim2.new(0.55, 0, 0.2, 0)
-emoteDropdown.Text = "nyoli"
-emoteDropdown.BackgroundColor3 = Color3.fromRGB(0,100,150)
-emoteDropdown.MouseButton1Click:Connect(function()
-    local opts = {"nyoli", "lelah", "duduk"}
-    local list = Instance.new("Frame", emoteFrame)
-    list.Size = UDim2.new(0.4, 0, 0, 90)
-    list.Position = UDim2.new(0.55, 0, 0.8, 0)
-    list.BackgroundColor3 = Color3.fromRGB(30,30,50)
-    for i, opt in pairs(opts) do
-        local btn = Instance.new("TextButton", list)
-        btn.Size = UDim2.new(1,0,0,30)
-        btn.Text = opt
-        btn.MouseButton1Click:Connect(function()
-            currentEmote = opt
-            emoteDropdown.Text = opt
-            list:Destroy()
-        end)
-    end
-end)
-
-makeToggle("👁️ Mode Look (Wallhack)", "espEnabled", function(val)
+addToggle("👁️ MODE LOOK (WALLHACK)", "espEnabled", function(val)
     espEnabled = val
-    if val then createESP() else clearESP() end
+    updateESP()
 end)
 
-makeToggle("🎯 Auto Aim Pistol", "autoAimEnabled", function(val)
+addToggle("🎯 AUTO AIM PISTOL", "autoAimEnabled", function(val)
     autoAimEnabled = val
     if val then
         spawn(function()
             while autoAimEnabled do
-                autoAim()
-                wait(0.1)
+                autoAimShoot()
+                wait(0.05)
             end
         end)
     end
 end)
-makeDropdown("🔫 Target Aim", {"Survivor", "Killer", "All"}, "autoAimTarget")
+addDropdown("🔫 TARGET AIM", {"Killer", "Survivor", "All"}, "autoAimTarget")
 
-makeToggle("🛡️ Kebal (God Mode)", "godModeEnabled", function(val)
+addToggle("🛡️ KEBAL MODE (GOD MODE)", "godModeEnabled", function(val)
     godModeEnabled = val
-    setGodMode()
+    enableGodMode()
 end)
 
-makeToggle("💀 Mode Killer (Teleport + Auto Attack)", "killerModeEnabled", function(val)
+addToggle("😈 EMOTE MODE", "emoteEnabled", function(val)
+    emoteEnabled = val
+end)
+addDropdown("🎭 PILIH EMOTE", {"nyoli", "lelah", "duduk"}, "currentEmote")
+
+addToggle("👥 AUTO FOLLOW (klik nama di list)", "followEnabled", function(val)
+    followEnabled = val
+    if val and followTarget then
+        startFollowing()
+    elseif not val and followConnection then
+        followConnection:Disconnect()
+    end
+end)
+
+addToggle("💀 MODE KILLER (AUTO KILL ALL)", "killerModeEnabled", function(val)
     killerModeEnabled = val
-    if val then startKillerMode() elseif killerAttackTask then killerAttackTask:Disconnect() end
+    if val then
+        startKillerAutoKill()
+    elseif killLoopConnection then
+        killLoopConnection:Disconnect()
+    end
 end)
 
-makeToggle("⏱️ No Cooldown", "noCooldownEnabled", function(val)
+addToggle("⏱️ NO COOLDOWN", "noCooldownEnabled", function(val)
     noCooldownEnabled = val
-    if val then setNoCooldown() end
+    if val then enableNoCooldown() end
 end)
 
--- Toggle UI dengan huruf L
-local uiVisible = true
-toggleButton.MouseButton1Click:Connect(function()
-    uiVisible = not uiVisible
-    mainFrame.Visible = uiVisible
+-- Tombol L (toggle UI)
+local lButton = Instance.new("TextButton", screenGui)
+lButton.Size = UDim2.new(0, 55, 0, 55)
+lButton.Position = UDim2.new(0, 15, 1, -75)
+lButton.Text = "L"
+lButton.TextColor3 = Color3.fromRGB(0, 255, 255)
+lButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+lButton.BackgroundTransparency = 0.3
+lButton.Font = Enum.Font.GothamBold
+lButton.TextSize = 35
+Instance.new("UICorner", lButton).CornerRadius = UDim.new(1, 0)
+local lStroke = Instance.new("UIStroke", lButton)
+lStroke.Color = Color3.fromRGB(0, 255, 255)
+lStroke.Thickness = 2
+
+lButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
 end)
 
-closeBtn.MouseButton1Click:Connect(function()
-    mainFrame.Visible = false
-    uiVisible = false
+-- Buat player list
+createPlayerList()
+
+-- Auto update ESP tiap detik
+spawn(function()
+    while wait(1) do
+        if espEnabled then updateESP() end
+    end
 end)
 
--- Reset on character respawn biar fitur tetep jalan
+-- Character respawn handler
 player.CharacterAdded:Connect(function(newChar)
     char = newChar
     hrp = char:WaitForChild("HumanoidRootPart")
@@ -559,22 +703,24 @@ player.CharacterAdded:Connect(function(newChar)
     wait(0.5)
     if flyEnabled then startFly() end
     if runEnabled then hum.WalkSpeed = runSpeed end
-    if godModeEnabled then setGodMode() end
-    if espEnabled then createESP() end
-    if killerModeEnabled then startKillerMode() end
-    if noCooldownEnabled then setNoCooldown() end
+    if godModeEnabled then enableGodMode() end
+    if espEnabled then updateESP() end
+    if killerModeEnabled then startKillerAutoKill() end
+    if noCooldownEnabled then enableNoCooldown() end
+    if followEnabled and followTarget then startFollowing() end
 end)
 
--- Notifikasi siap
+-- Notifikasi sukses
 local notif = Instance.new("TextLabel", screenGui)
-notif.Text = "✅ Delta Executor | Violence District HUB Aktif! Tekan L untuk toggle UI"
-notif.Size = UDim2.new(0, 400, 0, 40)
+notif.Text = "✅ VIOLENCE DISTRICT HUB ACTIVE | Tekan L untuk buka/tutup UI"
+notif.Size = UDim2.new(0, 400, 0, 35)
 notif.Position = UDim2.new(0.5, -200, 0, 20)
-notif.BackgroundColor3 = Color3.fromRGB(0,0,0)
+notif.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 notif.BackgroundTransparency = 0.3
-notif.TextColor3 = Color3.fromRGB(0,255,255)
+notif.TextColor3 = Color3.fromRGB(0, 255, 0)
 notif.Font = Enum.Font.GothamBold
-notif.TextSize = 14
 Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 10)
 wait(3)
 notif:Destroy()
+
+print("🔥 Delta Executor - Violence District HUB LOADED! 🔥")
