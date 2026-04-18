@@ -1,11 +1,20 @@
--- [[ L - VIOLENCE DISTRIK GACOR EDITION (FIXED UI) ]] --
+-- [[ L - VIOLENCE DISTRIK GACOR FIXED UI ]] --
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
 local Window = Library.CreateLib("L - VIOLENCE DISTRIK", "GrapeTheme")
 
--- Simpan referensi Main Frame UI Kavo
-local MainFrame = game:GetService("CoreGui"):FindFirstChild("L - VIOLENCE DISTRIK") or game:GetService("CoreGui"):WaitForChild("L - VIOLENCE DISTRIK")
+-- Variabel Global (Fitur Tetap)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- // LOGIC OPEN/CLOSE DENGAN TOMBOL X & LOGO L
+local _G = {
+    Fly = false, Speed = 16, SpeedEnabled = false, FollowEnabled = false,
+    FollowTarget = nil, AutoAim = false, AimType = "All", GodMode = false,
+    KillerMode = false, NoCD = false, ESP = false, CurrentEmote = nil
+}
+
+-- [[ SISTEM TOGGLE LOGO L ]] --
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
 local L_Button = Instance.new("TextButton", ScreenGui)
 local Corner = Instance.new("UICorner", L_Button)
@@ -20,49 +29,15 @@ L_Button.TextSize = 40
 L_Button.Draggable = true
 Corner.CornerRadius = UDim.new(0, 15)
 
--- Tambahkan Tombol X di UI Kavo secara manual
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Parent = MainFrame:FindFirstChild("Main") or MainFrame
-CloseBtn.Name = "CloseButton"
-CloseBtn.Text = "X"
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 5) -- Pojok kanan atas
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-CloseBtn.TextColor3 = Color3.new(1, 1, 1)
-CloseBtn.Font = Enum.Font.SourceSansBold
-CloseBtn.TextSize = 20
-
-local CloseCorner = Instance.new("UICorner", CloseBtn)
-CloseCorner.CornerRadius = UDim.new(0, 5)
-
--- Fungsi Close (X)
-CloseBtn.MouseButton1Click:Connect(function()
-    MainFrame.Enabled = false
-end)
-
--- Fungsi Open (L)
+-- Fungsi Toggle: Klik Logo L buat buka/tutup
 L_Button.MouseButton1Click:Connect(function()
-    MainFrame.Enabled = not MainFrame.Enabled
+    game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.RightControl, false, game)
 end)
 
--- =========================================================
--- JANGAN UBAH KODE DI BAWAH (FITUR TETAP SAMA SEPERTI SEBELUMNYA)
--- =========================================================
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-
-local _G = {
-    Fly = false, Speed = 16, SpeedEnabled = false, FollowEnabled = false,
-    FollowTarget = nil, AutoAim = false, AimType = "All", GodMode = false,
-    KillerMode = false, NoCD = false, ESP = false, CurrentEmote = nil
-}
-
--- TAB: MOVEMENT
+-- [[ TAB: MOVEMENT ]] --
 local Tab1 = Window:NewTab("Movement")
 local Sec1 = Tab1:NewSection("Terbang & Lari")
+
 Sec1:NewToggle("Fly Mode", "Terbang", function(state)
     _G.Fly = state
     local bv = Instance.new("BodyVelocity")
@@ -78,6 +53,7 @@ Sec1:NewToggle("Fly Mode", "Terbang", function(state)
         bv:Destroy()
     end)
 end)
+
 Sec1:NewSlider("Run Speed", "Speed", 500, 16, function(s) _G.Speed = s end)
 Sec1:NewToggle("Fast Run", "Lari", function(state)
     _G.SpeedEnabled = state
@@ -88,17 +64,32 @@ Sec1:NewToggle("Fast Run", "Lari", function(state)
             end
             task.wait()
         end
-        LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        if LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
     end)
 end)
 
--- TAB: AVATAR & EMOTE
+-- [[ TAB: AVATAR & EMOTE ]] --
 local Tab2 = Window:NewTab("Avatar & Emote")
 local Sec2 = Tab2:NewSection("Emote & Auto Follow")
-Sec2:NewDropdown("Pilih Emote", "Animasi", {"Nyoli", "Lelah", "Duduk"}, function(e) _G.CurrentEmote = e end)
-local p_names = {}
-for _, v in pairs(Players:GetPlayers()) do if v ~= LocalPlayer then table.insert(p_names, v.Name) end end
-Sec2:NewDropdown("Pilih Player", "Daftar User", p_names, function(selected) _G.FollowTarget = Players:FindFirstChild(selected) end)
+
+Sec2:NewDropdown("Pilih Emote", "Animasi", {"Nyoli", "Lelah", "Duduk"}, function(e) 
+    _G.CurrentEmote = e 
+end)
+
+local function getPlayers()
+    local p_names = {}
+    for _, v in pairs(Players:GetPlayers()) do 
+        if v ~= LocalPlayer then table.insert(p_names, v.Name) end 
+    end
+    return p_names
+end
+
+Sec2:NewDropdown("Pilih Player", "Daftar User", getPlayers(), function(selected) 
+    _G.FollowTarget = Players:FindFirstChild(selected) 
+end)
+
 Sec2:NewToggle("Auto Follow Player", "Kejar & Tempel", function(state)
     _G.FollowEnabled = state
     task.spawn(function()
@@ -121,31 +112,37 @@ Sec2:NewToggle("Auto Follow Player", "Kejar & Tempel", function(state)
     end)
 end)
 
--- TAB: VISUALS
+-- [[ TAB: VISUALS ]] --
 local Tab3 = Window:NewTab("Visuals")
 local Sec3 = Tab3:NewSection("Mode Look ESP")
-Sec3:NewToggle("Mode Look (ESP)", "ESP", function(state)
+
+Sec3:NewToggle("Mode Look (ESP)", "ESP Hijau/Merah", function(state)
     _G.ESP = state
-    while _G.ESP do
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                if not p.Character:FindFirstChild("L_ESP") then
-                    local hl = Instance.new("Highlight", p.Character)
-                    hl.Name = "L_ESP"
-                    local isKiller = p.Backpack:FindFirstChild("Knife") or p.Character:FindFirstChild("Knife")
-                    hl.FillColor = isKiller and Color3.new(1,0,0) or Color3.new(0,1,0)
-                    hl.FillTransparency = 0.5
+    task.spawn(function()
+        while _G.ESP do
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then
+                    if not p.Character:FindFirstChild("L_ESP") then
+                        local hl = Instance.new("Highlight", p.Character)
+                        hl.Name = "L_ESP"
+                        local isKiller = p.Backpack:FindFirstChild("Knife") or p.Character:FindFirstChild("Knife")
+                        hl.FillColor = isKiller and Color3.new(1,0,0) or Color3.new(0,1,0)
+                        hl.FillTransparency = 0.5
+                    end
                 end
             end
+            task.wait(1)
         end
-        task.wait(1)
-    end
-    for _, p in pairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("L_ESP") then p.Character.L_ESP:Destroy() end end
+        for _, p in pairs(Players:GetPlayers()) do 
+            if p.Character and p.Character:FindFirstChild("L_ESP") then p.Character.L_ESP:Destroy() end 
+        end
+    end)
 end)
 
--- TAB: COMBAT
+-- [[ TAB: COMBAT ]] --
 local Tab4 = Window:NewTab("Combat")
 local Sec4 = Tab4:NewSection("Auto Aim & Killer Mode")
+
 Sec4:NewDropdown("Aim Target", "Filter", {"Survivor", "Killer", "All"}, function(t) _G.AimType = t end)
 Sec4:NewToggle("Auto Aim Pistol", "Lock Kamera", function(state)
     _G.AutoAim = state
@@ -163,12 +160,19 @@ Sec4:NewToggle("Auto Aim Pistol", "Lock Kamera", function(state)
         end
     end)
 end)
+
 Sec4:NewToggle("Kebal (God Mode)", "Anti Death", function(state)
     _G.GodMode = state
     task.spawn(function()
-        while _G.GodMode do LocalPlayer.Character.Humanoid.Health = 100 task.wait() end
+        while _G.GodMode do 
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid.Health = 100 
+            end
+            task.wait() 
+        end
     end)
 end)
+
 Sec4:NewToggle("Mode Killer Ganas", "Auto TP Kill", function(state)
     _G.KillerMode = state
     task.spawn(function()
@@ -185,6 +189,7 @@ Sec4:NewToggle("Mode Killer Ganas", "Auto TP Kill", function(state)
         end
     end)
 end)
+
 Sec4:NewToggle("No Cooldown", "Anti Stun", function(state)
     _G.NoCD = state
     task.spawn(function()
@@ -197,4 +202,4 @@ Sec4:NewToggle("No Cooldown", "Anti Stun", function(state)
     end)
 end)
 
-print("L-Script FIXED UI Loaded! Klik Logo L buat buka, X buat tutup.")
+print("L-Script FIXED UI GACOR! Klik L buat buka/tutup.")
