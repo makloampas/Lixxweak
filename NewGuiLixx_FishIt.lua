@@ -1,4 +1,4 @@
--- [[ L - VIOLENCE DISTRIK GACOR V5 (ESP LOOK RE-ADDED) ]] --
+-- [[ L - VIOLENCE DISTRIK GACOR V6 (REFRESH BUTTON RESTORED) ]] --
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
@@ -33,7 +33,7 @@ Instance.new("UICorner", MainFrame)
 
 local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "L - VIOLENCE DISTRIK V5"
+Title.Text = "L - VIOLENCE DISTRIK V6"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
 Title.TextSize = 18
@@ -68,9 +68,9 @@ local function CreateToggle(name, callback)
     Instance.new("UICorner", Btn)
 end
 
--- // FITUR UPDATE (HANYA TAMBAH MODE LOOK) // --
+-- // FITUR UTAMA // --
 
--- FIX: MODE LOOK (ESP)
+-- 1. MODE LOOK (ESP)
 CreateToggle("Mode Look (ESP)", function(state)
     _G.ESP = state
     task.spawn(function()
@@ -82,27 +82,18 @@ CreateToggle("Mode Look (ESP)", function(state)
                         highlight = Instance.new("Highlight", p.Character)
                         highlight.Name = "L_ESP"
                     end
-                    
-                    -- Analisa Killer/Survivor (Berdasarkan Item Pisau)
                     local isKiller = p.Backpack:FindFirstChild("Knife") or p.Character:FindFirstChild("Knife")
                     highlight.FillColor = isKiller and Color3.new(1, 0, 0) or Color3.new(0, 1, 0)
-                    highlight.OutlineColor = Color3.new(1, 1, 1)
                     highlight.FillTransparency = 0.5
                 end
             end
             task.wait(1)
         end
-        -- Hapus ESP kalau dimatiin
-        for _, p in pairs(Players:GetPlayers()) do
-            if p.Character and p.Character:FindFirstChild("L_ESP") then
-                p.Character.L_ESP:Destroy()
-            end
-        end
+        for _, p in pairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("L_ESP") then p.Character.L_ESP:Destroy() end end
     end)
 end)
 
--- // FITUR LAIN (TETAP SAMA SEPERTI SEBELUMNYA) // --
-
+-- 2. SET SPEED
 local SpeedInput = Instance.new("TextBox", Scroll)
 SpeedInput.Size = UDim2.new(0, 250, 0, 35)
 SpeedInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
@@ -111,6 +102,7 @@ SpeedInput.TextColor3 = Color3.new(0, 1, 0)
 Instance.new("UICorner", SpeedInput)
 SpeedInput.FocusLost:Connect(function() _G.Speed = tonumber(SpeedInput.Text) or 16 end)
 
+-- 3. PLAYER LIST & REFRESH (INI YANG TADI ILANG)
 local PList = Instance.new("ScrollingFrame", Scroll)
 PList.Size = UDim2.new(0, 250, 0, 100)
 PList.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
@@ -128,13 +120,23 @@ local function RefreshPlayers()
             b.MouseButton1Click:Connect(function()
                 _G.AimTarget = p
                 _G.FollowTarget = p
-                print("Target Set Ke: " .. p.Name)
             end)
+            Instance.new("UICorner", b)
         end
     end
 end
+
+-- TOMBOL REFRESH PLAYER LIST
+local RefBtn = Instance.new("TextButton", Scroll)
+RefBtn.Size = UDim2.new(0, 250, 0, 30)
+RefBtn.Text = "REFRESH PLAYER LIST"
+RefBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+RefBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", RefBtn)
+RefBtn.MouseButton1Click:Connect(RefreshPlayers)
 RefreshPlayers()
 
+-- 4. AUTO FOLLOW & EMOTE
 CreateToggle("Auto Follow & Emote", function(state)
     _G.FollowEnabled = state
     task.spawn(function()
@@ -152,6 +154,7 @@ CreateToggle("Auto Follow & Emote", function(state)
     end)
 end)
 
+-- 5. AUTO AIM
 CreateToggle("Auto Aim Pistol", function(state)
     _G.AutoAim = state
     task.spawn(function()
@@ -164,6 +167,7 @@ CreateToggle("Auto Aim Pistol", function(state)
     end)
 end)
 
+-- 6. GOD MODE
 CreateToggle("God Mode", function(state)
     _G.GodMode = state
     task.spawn(function()
@@ -178,6 +182,7 @@ CreateToggle("God Mode", function(state)
     end)
 end)
 
+-- 7. FAST RUN
 CreateToggle("Fast Run", function(state)
     _G.SpeedEnabled = state
     task.spawn(function()
@@ -189,6 +194,7 @@ CreateToggle("Fast Run", function(state)
     end)
 end)
 
+-- 8. FLY MODE
 CreateToggle("Fly Mode", function(state)
     _G.Fly = state
     local bv = Instance.new("BodyVelocity")
@@ -203,6 +209,7 @@ CreateToggle("Fly Mode", function(state)
     end)
 end)
 
+-- 9. KILLER MODE
 CreateToggle("Killer Mode (TP KILL)", function(state)
     _G.KillerMode = state
     task.spawn(function()
@@ -220,6 +227,7 @@ CreateToggle("Killer Mode (TP KILL)", function(state)
     end)
 end)
 
+-- 10. NO COOLDOWN
 CreateToggle("No Cooldown", function(state)
     _G.NoCD = state
     task.spawn(function()
@@ -232,4 +240,4 @@ CreateToggle("No Cooldown", function(state)
     end)
 end)
 
-print("L-V5 GACOR: MODE LOOK BALIK!")
+print("L-V6 GACOR: SEMUA MENU & REFRESH SIAP!")
